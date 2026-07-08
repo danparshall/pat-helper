@@ -1,4 +1,4 @@
-# pat_helper
+# pat-helper
 
 Personal-scale review assistant for AI Policy / economic-impact papers.
 

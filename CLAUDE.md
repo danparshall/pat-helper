@@ -1,4 +1,4 @@
-# pat_helper — Claude instructions
+# pat-helper — Claude instructions
 
 ## Purpose
 

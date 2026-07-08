@@ -1,4 +1,4 @@
-# pat_helper kickoff — PAT paper, reframe to personal-scale, initial design brainstorm
+# pat-helper kickoff — PAT paper, reframe to personal-scale, initial design brainstorm
 
 **Date:** 2026-07-08
 **Branch:** main
@@ -15,7 +15,10 @@ al. 2606.28277, June 26 2026) to the general-ai-abilities collection, then to
 discuss implementability. Initial framing was policy-audience-facing ("how do we
 demo this?"). Actual goal, surfaced later, is narrower and more actionable:
 **a personal-scale review tool Dan can use on his own working papers, shippable
-publicly as a teaching artifact for economists learning to use AI**.
+publicly as a teaching artifact for economists learning to use AI**. Repo name:
+`pat-helper` (hyphenated). A future Python package inside it may use the
+`pat_helper` snake_case form per Python convention — but the repo, docs, and
+GH remote all use the hyphenated form.
 
 Reframing changes the design substantially. This repo is where the reframed
 project lives. This convo is the handoff artifact for the next brainstorming
@@ -69,7 +72,7 @@ policy conversations." Real goal turned out to be:
 
 This inverts most of PAT's design constraints:
 
-| PAT | pat_helper |
+| PAT | pat-helper |
 |---|---|
 | 4,700 papers × 1 pass | ~5 papers × N iterations |
 | Compute cost matters | Effectively free at 1-user scale |
@@ -209,7 +212,7 @@ worth pushing on:
    first major architectural decision.
 8. **Cross-referencing the paper library.** The "3-month task horizons" catch
    above only worked because I had access to Dan's paper collection. Should
-   pat_helper have a mode where it consults `~/code/general-ai-abilities/PAPER_SUMMARIES.md`
+   pat-helper have a mode where it consults `~/code/general-ai-abilities/PAPER_SUMMARIES.md`
    during review? What if it's someone else's collection?
 
 ## Not open for challenge (Dan's stated preferences)

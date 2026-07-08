@@ -130,7 +130,7 @@ grounding addresses (b).
   is honest, but the audit results are not reported separately from the headline
   detection rates.
 
-**Relevance to pat_helper:** This is the source paper the whole project is
+**Relevance to pat-helper:** This is the source paper the whole project is
 patterned on. The four-stage architecture (Segmenter → Adaptive Budgeter →
 parallel Deep Review → search-grounded Global Synthesis) is transferable
 essentially as-is at the pattern level. What has to be rebuilt from scratch for

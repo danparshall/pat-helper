@@ -1,4 +1,4 @@
-# STATUS — pat_helper
+# STATUS — pat-helper
 
 Last updated: 2026-07-08
 
