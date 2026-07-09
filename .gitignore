@@ -2,11 +2,16 @@
 __pycache__/
 *.pyc
 .venv/
-.python-version
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
 
 # Env
 .env.local
 .env
+
+# Unpublished drafts / private inputs (Dan's .tex lives here)
+data/
 
 # Editor
 .DS_Store

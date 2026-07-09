@@ -1,25 +1,24 @@
 # STATUS — pat-helper
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 ## Current Focus
 
-**Kickoff.** No code yet. Design is under active brainstorming.
+**v1 implementation.** Design approved 2026-07-09 (pipeline shape C: flat
+fan-out → mechanical quote-check → adversarial verify → synthesis → markdown).
+See `docs/plans/main/20260709_pat_helper_v1_plan.md`.
 
-Immediate open questions (see `docs/convos/main/20260708_pat_kickoff_and_reframe.md`
-for context):
-
-1. What are the *right* review lenses for AI-Policy / econ-impact writing?
-   Rough 8-lens starting list is proposed but not validated.
-2. Which model does what? Multi-model triangulation is a stated design goal;
-   how do we operationalize convergence-detection cheaply?
-3. Input format — Markdown / LaTeX / PDF? All three?
-4. Public-ship path — Colab notebook, standalone CLI, or slash-command in
-   Claude Code? Each answers a different "teach economists" question.
-5. How do we validate that the tool actually catches things — do we need our
-   own SPOT-analog for policy papers?
+Resolved this week: input = LaTeX, output = markdown review file, v1 scope =
+core loop + planted-error harness (corpus cross-ref / search grounding / Colab
+deferred). Still open: lens-set validation (harness-driven), adversarial-verify
+calibration, waiting on Dan's `.tex` of the Task Exposure paper for the live
+harness run.
 
 ## Recent Sessions
+
+- **2026-07-09** — Design brainstorm: worked kickoff's 8 open questions,
+  approved pipeline shape C, locked v1 scope, wrote implementation plan,
+  began solo build. Convo: `docs/convos/main/20260709_v1_design_brainstorm.md`.
 
 - **2026-07-08** — Kickoff. Added PAT paper + summary to general-ai-abilities.
   Reframed personal-scale goal after Dan surfaced canaryinstitute.ai working
