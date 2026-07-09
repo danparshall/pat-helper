@@ -25,16 +25,48 @@ econ/policy work." This repo is where that rebuild lives.
 
 Source paper + summary + kickoff convo in `docs/convos/main/`.
 
+## Quickstart
+
+```bash
+uv venv && uv sync
+cp .env.example .env   # fill in ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY
+uv run pat-helper review path/to/main.tex
+```
+
+Output: `review_<paper>_<date>.md` — findings grouped by severity, each tagged
+`{lens, models, quote, evidence, suggested-fix}`, with demoted (ungrounded or
+refuted) findings kept in an appendix and coverage gaps reported. Providers
+and lenses are subsettable: `--providers anthropic --lenses causal-id,sources`.
+Missing keys degrade to recorded gaps, never a crash.
+
+**Pipeline:** 8 lenses × 3 models fan out in parallel (every call sees the
+full paper) → every quote is **mechanically checked** against the source
+(hallucinated quotes demoted, zero API cost) → HIGH/MEDIUM findings face an
+**adversarial verifier from a different model** → one synthesis call dedups,
+merges, and records convergence → deterministic markdown renderer. Where PAT
+had a segmenter + compute budgeter (scale machinery), pat-helper has
+grounding + refutation (rigor machinery).
+
+Lens prompts live in `pat_helper/lenses/*.md` as plain markdown — read them,
+fork them; they are the teaching surface.
+
+**Validation:** `uv run python harness/run.py <main.tex>` plants known defects
+(`harness/defects.yaml`), reruns the review, and scores recall via an LLM
+judge.
+
 ## Directory layout
 
+- `pat_helper/` — the package (pipeline, providers, lenses, report, CLI)
+- `harness/` — planted-error validation harness
+- `tests/` — pytest suite (fake providers; no live API calls)
+- `data/` — gitignored; unpublished drafts under review live here
 - `docs/convos/main/` — session convo docs on the main line of work
-- `docs/active/` — active named research lines (per branch)
-- `docs/historical/` — archived research lines
-- `papers/` — reference PDFs (source paper: PAT)
-- `papers/text/` — text extractions
-- `PAPER_SUMMARIES.md` — summary of PAT and any future reference papers
-- `STATUS.md` — recent sessions, current focus, archived research lines
+- `docs/plans/main/` — implementation plans
+- `docs/active/` / `docs/historical/` — active / archived research lines
+- `papers/`, `papers/text/`, `PAPER_SUMMARIES.md` — reference papers (PAT)
+- `STATUS.md` — recent sessions, current focus
 
 ## Status
 
-Kickoff stage — no code yet. See `STATUS.md` for current focus.
+v1 pipeline implemented (2026-07-09); tests green. Awaiting first live
+validation run on a real paper. See `STATUS.md` for current focus.

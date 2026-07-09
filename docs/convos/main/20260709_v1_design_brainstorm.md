@@ -72,6 +72,35 @@ Key reframings this session (provisional, but design-load-bearing):
 - Where the deferred corpus cross-ref plugs in (likely: extra context handed
   to the prior-work lens only).
 
+## Build results (same session, post-brainstorm)
+
+v1 implemented end-to-end, TDD (tests written first, red → green):
+
+- **26 tests green, ruff clean.** Suite covers latex flattening (\input
+  resolution, comment stripping incl. `\%`, line map), quote grounding
+  (exact/normalized/fuzzy/miss with locations), report rendering (severity
+  ordering, provenance, appendix, gaps), pipeline orchestration via fake
+  providers (24-cell fan-out, retry, dead-provider degradation, refuter ≠
+  finder, ungrounded skip verification, synthesis sees only survivors,
+  refuted findings demoted not deleted), and defect injection.
+- **CLI dry-run verified:** with no API keys, a run degrades to recorded
+  coverage gaps and still emits a valid report (by design).
+- **Model IDs verified by web research 2026-07-09** (both Dan's notes and
+  Claude's priors were stale): OpenAI default `gpt-5.5` (GPT-5.6 Sol/Terra
+  launched 2026-07-09 — too fresh to pin); Google `gemini-3.1-pro-preview`
+  (`gemini-3-pro-preview` was retired 2026-03-09; stable fallback
+  `gemini-2.5-pro`); Anthropic `claude-opus-4-8`. Also: google-genai does
+  NOT auto-retry by default (verified in SDK source) — retries enabled
+  explicitly in our client.
+- **Plan deviations:** injector lives at `pat_helper/injector.py` (importable
+  by tests) with harness scripts in `harness/`; harness scoring is in
+  `harness/run.py` rather than a separate score.py.
+
+Blocked / waiting:
+- Live smoke test + first harness run need API keys (`.env`) — none present
+  in this environment.
+- Real validation run needs Dan's Task Exposure `.tex` in `data/`.
+
 ## Session Notes
 
 - YOLO mode; Dan authorized solo implementation after design approval.
