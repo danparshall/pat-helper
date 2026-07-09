@@ -16,6 +16,8 @@ from pat_helper.models import SourceLocation
 # % starts a comment unless escaped as \%
 _COMMENT_RE = re.compile(r"(?<!\\)%.*$")
 _INPUT_RE = re.compile(r"\\input\{([^}]+)\}")
+_BEGIN_DOC_RE = re.compile(r"\\begin\{document\}")
+_END_DOC_RE = re.compile(r"\\end\{document\}")
 
 MAX_INPUT_DEPTH = 10
 
@@ -66,9 +68,27 @@ def _flatten_file(path: Path, root: Path, depth: int = 0) -> list[tuple[str, Sou
     return out
 
 
+def _strip_document_envelope(
+    lines: list[tuple[str, SourceLocation]],
+) -> list[tuple[str, SourceLocation]]:
+    """Drop preamble (before \\begin{document}) and postamble (from \\end{document}).
+
+    Pandoc-generated .tex files carry ~50 lines of package-loading boilerplate
+    before the actual content; keeping them in flattened text taxes lens agents'
+    context budget on material a reviewer would never comment on. Fragments
+    without either marker (e.g. an \\input'd child, or a hand-authored snippet)
+    pass through unchanged.
+    """
+    begin = next((i for i, (ln, _) in enumerate(lines) if _BEGIN_DOC_RE.search(ln)), None)
+    end = next((i for i, (ln, _) in enumerate(lines) if _END_DOC_RE.search(ln)), None)
+    start = begin + 1 if begin is not None else 0
+    stop = end if end is not None else len(lines)
+    return lines[start:stop]
+
+
 def load_paper(main_tex: str | Path) -> FlattenedPaper:
     main = Path(main_tex).resolve()
-    lines = _flatten_file(main, main.parent)
+    lines = _strip_document_envelope(_flatten_file(main, main.parent))
     return FlattenedPaper(
         name=main.stem,
         text="\n".join(line for line, _ in lines),

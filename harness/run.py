@@ -31,7 +31,17 @@ from pat_helper.latex import load_paper  # noqa: E402
 from pat_helper.pipeline import run_review  # noqa: E402
 from pat_helper.prompts import load_lenses  # noqa: E402
 from pat_helper.providers.anthropic_client import AnthropicProvider  # noqa: E402
+from pat_helper.providers.google_client import GoogleProvider  # noqa: E402
+from pat_helper.providers.openai_client import OpenAIProvider  # noqa: E402
 from pat_helper.report import render  # noqa: E402
+
+# Judge-provider dispatch. Kept out of _build_providers so the judge picks its
+# own model (JUDGE_MODEL[1]) independent of the review fan-out's config.models.
+_JUDGE_CLASSES = {
+    "anthropic": AnthropicProvider,
+    "openai": OpenAIProvider,
+    "google": GoogleProvider,
+}
 
 JUDGE_SCHEMA = {
     "type": "object",
@@ -87,7 +97,7 @@ async def amain(args) -> int:
         file=sys.stderr,
     )
 
-    judge = AnthropicProvider(JUDGE_MODEL[1])
+    judge = _JUDGE_CLASSES[JUDGE_MODEL[0]](JUDGE_MODEL[1])
     findings_json = [f.to_json() for f in run.findings]
     results = []
     for defect in manifest:

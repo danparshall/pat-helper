@@ -18,8 +18,10 @@ DEFAULT_MODELS = {
     "google": "gemini-3.1-pro-preview",
 }
 
-# Cheap model for harness recall-scoring (LLM-judge matching findings↔defects)
-JUDGE_MODEL = ("anthropic", "claude-haiku-4-5")
+# Cheap model for harness recall-scoring (LLM-judge matching findings↔defects).
+# OpenAI mid-tier is the project's cheap default (~$0.25 / $2.00 per MTok input/output,
+# vs. Anthropic Haiku ~$0.80 / $4.00). Matcher-not-generator task — mid-tier is plenty.
+JUDGE_MODEL = ("openai", "gpt-5.6-terra")
 
 
 @dataclass
