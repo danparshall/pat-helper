@@ -1,0 +1,49 @@
+# Planted-error defects for the validation harness.
+#
+# Each defect mutates the source .tex; the harness then runs the full review
+# pipeline on the mutated copy and scores RECALL: did any surviving finding
+# identify the planted problem? Findings that match no defect are listed as
+# "extras" (not automatically false — the paper may have real issues too).
+#
+# Fields:
+#   id:            unique slug
+#   file:          .tex file (relative to the source dir) containing `original`
+#   original:      exact text to replace (must occur; hard error otherwise)
+#   mutated:       replacement text containing the planted defect
+#   lens_expected: which lens *should* catch this (informational)
+#   description:   what a competent reviewer should say — the judge matches
+#                  findings against this
+#
+# The two defects below target the tiny test fixture (tests/fixtures/) so the
+# harness machinery can be exercised end-to-end cheaply. The real validation
+# run uses Dan's Task Exposure paper (data/, gitignored) with ~10 defects
+# modeled on these templates:
+#   - inflate/deflate a load-bearing number (empirical-rigor)
+#   - swap a cited construct for a different one (prior-work)
+#   - weaken the identification strategy wording (causal-id)
+#   - make a definitional claim circular (argumentation / causal-id)
+#   - replace a primary source with a vendor claim (sources)
+#   - add factional vocabulary to a neutral sentence (framing-coalition)
+#   - drop a stated limitation, overclaim in the abstract (structure-scoping)
+#   - remove model-version info from an LLM-dependent result (reproducibility)
+
+- id: wrong-number
+  file: methods.tex
+  original: "0.31 standard deviations"
+  mutated: "3.1 standard deviations"
+  lens_expected: empirical-rigor
+  description: >
+    The reported effect size (3.1 standard deviations) is implausibly large —
+    an order of magnitude beyond what conventional benchmarks would call
+    enormous. A reviewer should flag the magnitude as suspect.
+
+- id: weakened-id
+  file: intro.tex
+  original: "regional variation in broadband rollout"
+  mutated: "national trends in broadband rollout"
+  lens_expected: causal-id
+  description: >
+    The identification strategy now rests on national time trends, which
+    provide no cross-sectional variation to identify against — the DiD design
+    claimed in Methods cannot work. A reviewer should flag that the stated
+    identification no longer identifies.
