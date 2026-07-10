@@ -13,7 +13,7 @@ from pat_helper.config import ReviewConfig
 from pat_helper.latex import load_paper
 from pat_helper.models import FINDINGS_SCHEMA, SYNTHESIS_SCHEMA, VERDICT_SCHEMA, LensSpec
 from pat_helper.pipeline import run_review
-from pat_helper.providers.base import Provider
+from pat_helper.providers.base import Provider, TruncatedOutputError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -31,15 +31,27 @@ def make_finding(quote=GROUNDED_QUOTE, severity="HIGH"):
 
 
 class FakeProvider(Provider):
-    def __init__(self, name, findings=None, fail_times=0, fail_always=False, verdict="upheld"):
+    def __init__(
+        self,
+        name,
+        findings=None,
+        fail_times=0,
+        fail_always=False,
+        verdict="upheld",
+        truncate_synthesis=False,
+    ):
         self.name = name
         self.findings = findings if findings is not None else [make_finding()]
         self.remaining_failures = fail_times
         self.fail_always = fail_always
         self.verdict = verdict
+        self.truncate_synthesis = truncate_synthesis
         self.calls = []  # list of (kind, system, user)
+        self.call_caps = []  # list of (kind, max_output_tokens)
 
-    async def complete_json(self, system: str, user: str, schema: dict) -> dict:
+    async def complete_json(
+        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+    ) -> dict:
         if schema is FINDINGS_SCHEMA:
             kind = "findings"
         elif schema is VERDICT_SCHEMA:
@@ -49,6 +61,9 @@ class FakeProvider(Provider):
         else:
             kind = "unknown"
         self.calls.append((kind, system, user))
+        self.call_caps.append((kind, max_output_tokens))
+        if kind == "synthesis" and self.truncate_synthesis:
+            raise TruncatedOutputError("output truncated: stop_reason=max_tokens")
         if self.fail_always:
             raise RuntimeError("permanent failure")
         if self.remaining_failures > 0:
@@ -135,9 +150,7 @@ async def test_synthesis_receives_only_survivors(paper):
     liar = FakeProvider("liar", findings=[make_finding(quote=FABRICATED_QUOTE)])
     ok = FakeProvider("fake-b")
     run = await run_review(paper, [liar, ok], lenses(1), config())
-    synth_calls = [
-        (k, u) for p in (liar, ok) for k, _s, u in p.calls if k == "synthesis"
-    ]
+    synth_calls = [(k, u) for p in (liar, ok) for k, _s, u in p.calls if k == "synthesis"]
     assert synth_calls, "synthesis was never called"
     for _k, user in synth_calls:
         assert FABRICATED_QUOTE not in user
@@ -150,6 +163,36 @@ async def test_refuted_findings_are_demoted_not_deleted(paper):
     run = await run_review(paper, [finder, refuter], lenses(1), config())
     # finder's HIGH finding gets refuted by the other provider -> demoted
     assert any(f.verified == "refuted" for f in run.demoted)
+
+
+async def test_synthesis_call_carries_the_synthesis_output_cap(paper):
+    """Synthesis output scales with finding count (110 findings truncated the
+    16k default on 2026-07-09), so the pipeline must request the larger
+    synthesis-specific cap on that call — and only that call."""
+    provs = [FakeProvider("fake-a"), FakeProvider("fake-b")]
+    await run_review(paper, provs, lenses(2), config(synthesis_max_output_tokens=54321))
+    caps = [(k, cap) for p in provs for k, cap in p.call_caps]
+    synth_caps = [cap for k, cap in caps if k == "synthesis"]
+    assert len(synth_caps) == 1, "expected exactly one synthesis call"
+    assert synth_caps == [54321]
+    # Lens and verify calls keep the provider's own default (no override)
+    assert all(cap is None for k, cap in caps if k != "synthesis")
+
+
+async def test_truncated_synthesis_is_not_retried_and_passes_through_unmerged(paper):
+    """Truncation is deterministic — retrying an over-cap synthesis burns the
+    same tokens again. One attempt, an explicit gap, unmerged pass-through."""
+    truncating = FakeProvider("fake-a", truncate_synthesis=True)
+    other = FakeProvider("fake-b")
+    run = await run_review(paper, [truncating, other], lenses(1), config())
+    synthesis_attempts = sum(
+        1 for p in (truncating, other) for k, _s, _u in p.calls if k == "synthesis"
+    )
+    assert synthesis_attempts == 1
+    assert any("truncated" in g for g in run.gaps)
+    # Survivors passed through unmerged (each finding still credits one model)
+    assert run.findings
+    assert all(len(f.models) == 1 for f in run.findings)
 
 
 async def test_low_severity_findings_skip_verification(paper):

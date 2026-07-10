@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from openai import AsyncOpenAI
 
-from pat_helper.providers.base import Provider, parse_json_strict
+from pat_helper.providers.base import Provider, TruncatedOutputError, parse_json_strict
 
 
 class OpenAIProvider(Provider):
@@ -21,10 +21,13 @@ class OpenAIProvider(Provider):
         self.max_output_tokens = max_output_tokens
         self._client = AsyncOpenAI()
 
-    async def complete_json(self, system: str, user: str, schema: dict) -> dict:
+    async def complete_json(
+        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+    ) -> dict:
+        cap = max_output_tokens or self.max_output_tokens
         response = await self._client.responses.create(
             model=self.model,
-            max_output_tokens=self.max_output_tokens,
+            max_output_tokens=cap,
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -38,4 +41,10 @@ class OpenAIProvider(Provider):
                 }
             },
         )
+        if (
+            response.status == "incomplete"
+            and response.incomplete_details is not None
+            and response.incomplete_details.reason == "max_output_tokens"
+        ):
+            raise TruncatedOutputError(f"openai/{self.model} hit max_output_tokens={cap}")
         return parse_json_strict(response.output_text)

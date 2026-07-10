@@ -36,3 +36,8 @@ class ReviewConfig:
     # count against this too. 8192 truncated the synthesis JSON on a 57-finding
     # fixture run (2026-07-09); 16000 is the non-streaming safe ceiling.
     max_output_tokens: int = 16000
+    # Synthesis output scales with finding count (110 findings exceeded 16000
+    # on the 2026-07-09 real-paper run), so the synthesis call gets its own,
+    # larger cap. Requires streaming on Anthropic (SDK refuses non-streaming
+    # requests above ~16k). ~2.5x headroom over the largest observed run.
+    synthesis_max_output_tokens: int = 64000

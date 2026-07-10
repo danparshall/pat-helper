@@ -15,7 +15,7 @@ from __future__ import annotations
 from google import genai
 from google.genai import types
 
-from pat_helper.providers.base import Provider, parse_json_strict
+from pat_helper.providers.base import Provider, TruncatedOutputError, parse_json_strict
 
 
 class GoogleProvider(Provider):
@@ -33,15 +33,24 @@ class GoogleProvider(Provider):
             ),
         )
 
-    async def complete_json(self, system: str, user: str, schema: dict) -> dict:
+    async def complete_json(
+        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+    ) -> dict:
+        cap = max_output_tokens or self.max_output_tokens
         response = await self._client.aio.models.generate_content(
             model=self.model,
             contents=user,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                max_output_tokens=self.max_output_tokens,
+                max_output_tokens=cap,
                 response_mime_type="application/json",
                 response_json_schema=schema,
             ),
         )
+        truncated = (
+            response.candidates
+            and response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
+        )
+        if truncated:
+            raise TruncatedOutputError(f"google/{self.model} hit max_output_tokens={cap}")
         return parse_json_strict(response.text)

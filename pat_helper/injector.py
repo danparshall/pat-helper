@@ -35,9 +35,7 @@ def inject(src_dir: Path, defects: list[dict], out_dir: Path) -> list[dict]:
                 f"defect {defect['id']!r}: original text not found in {defect['file']!r}"
             )
         line = text.count("\n", 0, pos) + 1
-        target.write_text(
-            text[:pos] + defect["mutated"] + text[pos + len(defect["original"]) :]
-        )
+        target.write_text(text[:pos] + defect["mutated"] + text[pos + len(defect["original"]) :])
         manifest.append(
             {
                 "id": defect["id"],

@@ -30,7 +30,7 @@ from pat_helper.models import (
     Severity,
 )
 from pat_helper.prompts import SHARED_HEADER, synthesis_prompt, verify_prompt
-from pat_helper.providers.base import Provider
+from pat_helper.providers.base import Provider, TruncatedOutputError
 from pat_helper.quotecheck import check_quote
 
 log = logging.getLogger("pat_helper")
@@ -41,6 +41,8 @@ async def _with_retries(config: ReviewConfig, factory):
     for attempt in range(config.max_retries + 1):
         try:
             return await factory()
+        except TruncatedOutputError:
+            raise  # deterministic for a given input — retrying burns the same tokens
         except Exception as exc:  # noqa: BLE001 — provider errors are heterogeneous
             last_exc = exc
             if attempt < config.max_retries and config.backoff_base:
@@ -197,7 +199,12 @@ async def run_review(
     try:
         payload = await _with_retries(
             config,
-            lambda: synth_provider.complete_json(synthesis_prompt(), user, SYNTHESIS_SCHEMA),
+            lambda: synth_provider.complete_json(
+                synthesis_prompt(),
+                user,
+                SYNTHESIS_SCHEMA,
+                max_output_tokens=config.synthesis_max_output_tokens,
+            ),
         )
         merged = []
         for item in payload["findings"]:
