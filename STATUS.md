@@ -1,31 +1,31 @@
 # STATUS — pat-helper
 
-Last updated: 2026-07-09
+Last updated: 2026-07-10
 
 ## Current Focus
 
-**v1 live-validated: first real recall measurement is 8/10.** Both harness
-actions from the previous session are done (2026-07-09 evening): fixture run
-recall 2/2 with 0 gaps; real-paper run (10 planted defects in
-`data/task_exposure_v9.tex`) recall 8/10 with opus-4-8 / gpt-5.5 /
-gemini-3.1-pro-preview. Plan A (graceful provider degradation) implemented,
-35 tests green. Defects + outputs live in `data/` (gitignored — they quote
-the unpublished draft): `data/defects_task_exposure_v9.yaml`,
-`data/harness_out_v9/`. Convo:
-`docs/convos/main/20260709_env_hygiene_harness_runs_and_plan_a.md`.
+**Synthesis-at-scale fixed (2026-07-10).** The Anthropic provider now always
+streams, synthesis gets its own 64k cap (`synthesis_max_output_tokens`) on all
+three providers, adaptive thinking stays on, and hitting a cap raises a
+non-retryable `TruncatedOutputError` recorded as an explicit gap. 37 tests
+green; fixture harness re-validated (recall 2/2, 0 gaps, merged report shows
+three-provider convergence). The 110-finding-scale proof is deferred to the
+next paid v9 run, bundled with the lens-prompt upgrades. Convo:
+`docs/convos/main/20260710_synthesis_streaming_fix.md`.
+
+Prior context: first real recall measurement is 8/10 (10 planted defects in
+`data/task_exposure_v9.tex`, opus-4-8 / gpt-5.5 / gemini-3.1-pro-preview).
+Defects + outputs live in `data/` (gitignored — they quote the unpublished
+draft): `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
 
 Next actions:
-1. **Fix synthesis truncation at scale** — 110 findings exceed the 16000
-   output-token cap (adaptive thinking shares the budget), so the real-paper
-   report passed through unmerged. Options: stream the synthesis call with a
-   larger cap, `thinking: disabled` for synthesis (mechanical dedup), or
-   chunked synthesis. Recall is unaffected; report quality is.
-2. **Lens-prompt upgrades from the two misses** — empirical-rigor should
+1. **Lens-prompt upgrades from the two misses** — empirical-rigor should
    recompute arithmetic (missed 40h="4,800 minutes"; one finding praised the
    erroneous footnote); sources should test source-type vs claim-weight
    (missed Census→consultancy swap under a "first large-scale confirmation"
-   claim). Re-run the harness after edits — that's the loop working.
-3. **Skim the 102 extras** (need Dan) — findings matching no planted defect
+   claim). Re-run the real-paper harness after edits — that measures the new
+   prompts AND confirms synthesis merges 110+ findings under the 64k cap.
+2. **Skim the 102 extras** (need Dan) — findings matching no planted defect
    in `data/harness_out_v9/review_2026-07-09.md` are effectively a first AI
    review of the real v9 draft; also input for verifier calibration.
 
@@ -34,6 +34,14 @@ demoted — does refutation kill true findings?), OpenAI default pinned to
 gpt-5.5 pending GPT-5.6 stability.
 
 ## Recent Sessions
+
+- **2026-07-10** — Synthesis truncation fix (next-action 1). Decision convo:
+  output arithmetic showed streaming was load-bearing (merged JSON alone
+  exceeds 16k at 110 findings), so: Anthropic always streams, 64k synthesis
+  cap on all three providers, adaptive thinking kept, `TruncatedOutputError`
+  non-retryable + explicit gap. TDD (+2 tests, 37/37 green), live smoke on
+  opus-4-8, fixture harness recall 2/2 / 0 gaps / merged report. Convo:
+  `docs/convos/main/20260710_synthesis_streaming_fix.md`.
 
 - **2026-07-09 (evening)** — Env hygiene + both harness actions + plan A.
   Gitignored all `.env*`; `data/` → `~/data/pat-helper/` symlink. Fixture
