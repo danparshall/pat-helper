@@ -43,6 +43,20 @@ _JUDGE_CLASSES = {
     "google": GoogleProvider,
 }
 
+
+def build_judge():
+    """Construct the judge provider, failing fast if it can't be built.
+
+    Without a judge we can't score recall even in principle, so a missing key
+    here is a hard error rather than a coverage gap (plan A, behavior spec 3).
+    """
+    provider, model = JUDGE_MODEL
+    try:
+        return _JUDGE_CLASSES[provider](model)
+    except Exception:  # noqa: BLE001 — SDK auth errors are heterogeneous
+        raise SystemExit(f"Judge model ({provider}) unavailable — cannot score recall.") from None
+
+
 JUDGE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -87,17 +101,21 @@ async def amain(args) -> int:
 
     from pat_helper.cli import _build_providers
 
+    judge = build_judge()  # fail fast BEFORE burning a full review run
+
     provider_names = [p.strip() for p in args.providers.split(",") if p.strip()]
-    providers = _build_providers(provider_names, config)
+    providers, startup_gaps = _build_providers(provider_names, config)
+    for gap in startup_gaps:
+        print(f"WARNING: {gap}", file=sys.stderr)
     paper = load_paper(mutated_dir / main_tex.name)
     run = await run_review(paper, providers, load_lenses(), config)
+    run.gaps[:0] = startup_gaps
     print(
         f"Review done: {len(run.findings)} findings, {len(run.demoted)} demoted, "
         f"{len(run.gaps)} gaps",
         file=sys.stderr,
     )
 
-    judge = _JUDGE_CLASSES[JUDGE_MODEL[0]](JUDGE_MODEL[1])
     findings_json = [f.to_json() for f in run.findings]
     results = []
     for defect in manifest:
@@ -116,7 +134,7 @@ async def amain(args) -> int:
         f"# Harness run — {today}",
         "",
         f"**Recall: {hits}/{len(manifest)}**  ·  models: "
-        + ", ".join(config.models[n] for n in provider_names),
+        + ", ".join(f"{p.name}={p.model}" for p in providers),
         "",
         "| defect | expected lens | result | judge reasoning |",
         "|---|---|---|---|",

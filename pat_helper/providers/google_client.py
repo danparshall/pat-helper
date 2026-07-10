@@ -1,7 +1,11 @@
 """Google Gemini provider. Idioms verified via web research 2026-07-09.
 
 - google-genai SDK; client resolves GEMINI_API_KEY.
-- Async via client.aio; JSON output via response_mime_type + response_schema.
+- Async via client.aio; JSON output via response_mime_type +
+  response_json_schema. NOT response_schema: that field is an OpenAPI-subset
+  proto that rejects our schemas' `additionalProperties` keys with
+  400 INVALID_ARGUMENT (observed live 2026-07-09); response_json_schema
+  accepts standard JSON Schema per the SDK docstring.
 - google-genai does NOT auto-retry by default (verified in SDK source) —
   retry options are enabled explicitly here.
 """
@@ -37,7 +41,7 @@ class GoogleProvider(Provider):
                 system_instruction=system,
                 max_output_tokens=self.max_output_tokens,
                 response_mime_type="application/json",
-                response_schema=schema,
+                response_json_schema=schema,
             ),
         )
         return parse_json_strict(response.text)
