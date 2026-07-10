@@ -4,34 +4,46 @@ Last updated: 2026-07-09
 
 ## Current Focus
 
-**v1 implemented, awaiting live validation.** Pipeline shape C built
-2026-07-09 (flat fan-out → mechanical quote-check → adversarial verify →
-synthesis → markdown): 30 tests green, ruff clean. See
-`docs/plans/main/20260709_pat_helper_v1_plan.md` and the v1-hardening plan
-`docs/plans/main/20260709_v1_hardening_try_except.md`.
+**v1 live-validated: first real recall measurement is 8/10.** Both harness
+actions from the previous session are done (2026-07-09 evening): fixture run
+recall 2/2 with 0 gaps; real-paper run (10 planted defects in
+`data/task_exposure_v9.tex`) recall 8/10 with opus-4-8 / gpt-5.5 /
+gemini-3.1-pro-preview. Plan A (graceful provider degradation) implemented,
+35 tests green. Defects + outputs live in `data/` (gitignored — they quote
+the unpublished draft): `data/defects_task_exposure_v9.yaml`,
+`data/harness_out_v9/`. Convo:
+`docs/convos/main/20260709_env_hygiene_harness_runs_and_plan_a.md`.
 
-Task Exposure `.tex` staged: `data/task_exposure_v9.tex` (built from
-`~/code/econ-impact/drafts/CDR_Framework_draft_v9.md` via that repo's
-Makefile, 2026-07-09).
+Next actions:
+1. **Fix synthesis truncation at scale** — 110 findings exceed the 16000
+   output-token cap (adaptive thinking shares the budget), so the real-paper
+   report passed through unmerged. Options: stream the synthesis call with a
+   larger cap, `thinking: disabled` for synthesis (mechanical dedup), or
+   chunked synthesis. Recall is unaffected; report quality is.
+2. **Lens-prompt upgrades from the two misses** — empirical-rigor should
+   recompute arithmetic (missed 40h="4,800 minutes"; one finding praised the
+   erroneous footnote); sources should test source-type vs claim-weight
+   (missed Census→consultancy swap under a "first large-scale confirmation"
+   claim). Re-run the harness after edits — that's the loop working.
+3. **Skim the 102 extras** (need Dan) — findings matching no planted defect
+   in `data/harness_out_v9/review_2026-07-09.md` are effectively a first AI
+   review of the real v9 draft; also input for verifier calibration.
 
-Next actions (need Dan):
-1. Drop API keys in `.env` (see `.env.example`) → run
-   `uv run python harness/run.py tests/fixtures/main.tex` (cheap end-to-end
-   harness check, 2 planted defects). Judge is OpenAI now, so
-   `OPENAI_API_KEY` is the strictly required one for the harness.
-2. Write ~10 real defects for `data/task_exposure_v9.tex` → first real
-   recall measurement.
-3. Implement graceful-degradation plan A when context allows — spec at
-   `docs/plans/main/20260709_v1_hardening_try_except.md`. Not blocking the
-   harness runs above, but the fixture run currently hard-crashes without
-   all three keys present (only fires the fan-out cells whose keys exist
-   *after* A lands).
-
-Still open: lens-set validation (harness-driven), adversarial-verify
-calibration (does refutation kill true findings?), OpenAI default pinned to
+Still open: adversarial-verify calibration (only 23/133 raw findings
+demoted — does refutation kill true findings?), OpenAI default pinned to
 gpt-5.5 pending GPT-5.6 stability.
 
 ## Recent Sessions
+
+- **2026-07-09 (evening)** — Env hygiene + both harness actions + plan A.
+  Gitignored all `.env*`; `data/` → `~/data/pat-helper/` symlink. Fixture
+  harness surfaced and fixed two real bugs (Gemini `response_json_schema`
+  for `additionalProperties` schemas; `max_output_tokens` 8192→16000 after
+  thinking-shared-budget truncation) → recall 2/2, 0 gaps. Plan A landed via
+  TDD (35/35 green). Wrote 10 defects for the Task Exposure v9 paper → first
+  real recall **8/10**; misses (arithmetic recompute, source-type weight)
+  are lens-prompt gaps. Synthesis truncates at 110 findings — top next
+  action. Convo: `docs/convos/main/20260709_env_hygiene_harness_runs_and_plan_a.md`.
 
 - **2026-07-09** — Harness prep + v1 hardening. Built `data/task_exposure_v9.tex`
   from `~/code/econ-impact/drafts/CDR_Framework_draft_v9.md` (CDR paper =
