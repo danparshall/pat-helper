@@ -6,9 +6,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Env
-.env.local
+# Env — never commit any .env variant (secrets live here).
+# .env.example is the tracked, secret-free template.
 .env
+.env.*
+!.env.example
 
 # Unpublished drafts / private inputs (Dan's .tex lives here)
 data/
