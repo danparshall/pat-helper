@@ -32,4 +32,7 @@ class ReviewConfig:
     concurrency: int = 8  # max simultaneous provider calls
     fuzzy_threshold: float = 0.85  # quote-grounding fuzzy floor
     verify_severities: frozenset[str] = frozenset({"HIGH", "MEDIUM"})
-    max_output_tokens: int = 8192
+    # Hard cap on TOTAL output per call — on Anthropic, adaptive-thinking tokens
+    # count against this too. 8192 truncated the synthesis JSON on a 57-finding
+    # fixture run (2026-07-09); 16000 is the non-streaming safe ceiling.
+    max_output_tokens: int = 16000
