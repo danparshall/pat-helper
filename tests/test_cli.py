@@ -102,3 +102,44 @@ def test_judge_provider_unavailable_fails_fast(monkeypatch):
 
     with pytest.raises(SystemExit, match=rf"Judge model \({judge_provider}\) unavailable"):
         build_judge()
+
+
+# --- logging visibility -------------------------------------------------
+# Regression: the 2026-07-11 paid v9 harness run silently dropped the per-run
+# cache-usage summary (pipeline logs it at INFO on the "pat_helper" logger)
+# because no entry point ever configured logging — Python's last-resort
+# handler drops anything below WARNING.
+
+
+@pytest.fixture()
+def _reset_pat_helper_logger():
+    import logging
+
+    log = logging.getLogger("pat_helper")
+    saved_level, saved_handlers, saved_propagate = log.level, list(log.handlers), log.propagate
+    # Clean slate first: earlier tests may have run the entry point and left a
+    # handler bound to the real stderr, which would defeat capsys assertions.
+    log.handlers[:] = []
+    log.setLevel(logging.NOTSET)
+    yield
+    log.setLevel(saved_level)
+    log.handlers[:] = saved_handlers
+    log.propagate = saved_propagate
+
+
+def test_configure_logging_makes_pat_helper_info_visible_on_stderr(
+    capsys, _reset_pat_helper_logger
+):
+    import logging
+
+    cli.configure_logging()
+    logging.getLogger("pat_helper").info("cache usage test-sentinel: cached=1 uncached=2")
+    assert "test-sentinel" in capsys.readouterr().err
+
+
+def test_cli_entry_point_emits_cache_usage_summary(
+    monkeypatch, tmp_path, capsys, _reset_pat_helper_logger
+):
+    _patch_sdks(monkeypatch)
+    cli.main(["review", str(FIXTURE), "--out", str(tmp_path)])
+    assert "cache usage" in capsys.readouterr().err

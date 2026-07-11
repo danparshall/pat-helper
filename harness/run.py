@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO))
 
+from pat_helper.cli import configure_logging  # noqa: E402
 from pat_helper.config import JUDGE_MODEL, ReviewConfig  # noqa: E402
 from pat_helper.injector import inject  # noqa: E402
 from pat_helper.latex import load_paper  # noqa: E402
@@ -152,6 +153,7 @@ async def amain(args) -> int:
 
 
 def main() -> int:
+    configure_logging()  # cache-usage summary is INFO; without this it is dropped
     parser = argparse.ArgumentParser()
     parser.add_argument("paper", help="Path to main .tex of the SOURCE paper")
     parser.add_argument("--defects", default=str(REPO / "harness" / "defects.yaml"))

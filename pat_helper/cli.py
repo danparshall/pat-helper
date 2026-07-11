@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from datetime import date
 from pathlib import Path
@@ -25,6 +26,22 @@ PROVIDER_ENV_VARS = {
     "openai": "OPENAI_API_KEY",
     "google": "GEMINI_API_KEY",
 }
+
+
+def configure_logging() -> None:
+    """Make pat_helper INFO records (e.g. the per-run cache-usage summary)
+    visible on stderr.
+
+    The handler goes on the package logger, not the root logger, so
+    third-party SDK chatter stays at the default WARNING threshold. Idempotent
+    across repeated entry-point invocations in one process.
+    """
+    log = logging.getLogger("pat_helper")
+    log.setLevel(logging.INFO)
+    if not log.handlers:
+        handler = logging.StreamHandler()  # binds sys.stderr
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        log.addHandler(handler)
 
 
 def _build_providers(names: list[str], config: ReviewConfig) -> tuple[list, list[str]]:
@@ -87,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     rev.add_argument("--out", type=Path, default=Path("."), help="Output directory")
     args = parser.parse_args(argv)
 
+    configure_logging()
     load_dotenv()
     config = ReviewConfig()
     for override in args.model:
