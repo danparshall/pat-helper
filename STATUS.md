@@ -4,33 +4,30 @@ Last updated: 2026-07-11
 
 ## Current Focus
 
-**Recall 10/10 + synthesis-at-scale proven (2026-07-11).** The lens-prompt
-upgrades (recompute-arithmetic in empirical-rigor, source-type-vs-claim-weight
-in sources) flipped both v9 misses with zero regressions, and the same paid run
-delivered the deferred at-scale proof: ~100 survivors merged to 47 findings
-under the streamed 64k cap, no truncation, convergence recorded. Extras
-102 → 37 (synthesis dedup working). Out-of-sample bonus: the recompute
-directive caught two real arithmetic bugs in the v9 draft (31.6% vs 36.3% D2+;
-23,850 vs 23,852 task counts). One in-session regression fixed: per-lens cap
-raised 16k → 32k after empirical-rigor × opus hit the old cap. 37 tests green.
-Convo: `docs/convos/main/20260711_lens_upgrades_and_v9_rerun.md`.
-
-Cost accounting (same session): ~$22–25 per full run, ~two-thirds of it in
-adversarial verify (full paper re-sent per HIGH/MEDIUM finding). Prompt-caching
-plan written: `docs/plans/main/20260711_prompt_caching.md` (~$23 → ~$8–10,
-zero quality tradeoff).
+**Prompt caching implemented (2026-07-11 evening, `abec241`).** The paper is
+now a cacheable shared prefix across the lens fan-out AND adversarial verify
+(plan steps 1–13; stretch unification deferred). Live smoke: 99.98% of input
+tokens read from cache on the second identical-prefix opus call. Fixture
+harness gate after the lens-prompt restructure: recall 2/2, 0 gaps. 48 tests
+green (11 new). One plan flaw found+fixed in implementation: verify calls have
+their own cache prefix (different system prompt), so the verify stage primes
+per refuter — priming only the lens stage would have forfeited the verify-stage
+savings (two-thirds of run cost). Realized $ savings now observable via a
+per-run INFO cache-usage summary; expect ~$23 → ~$8–10 or better on the next
+paid v9 run (the flattened v9 paper is ~64k tokens, not the plan's ~44k).
+Convo: `docs/convos/main/20260711_prompt_caching_implementation.md`.
 
 Data locations unchanged: `data/` is gitignored (quotes the unpublished
 draft) — `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
 
 Next actions:
-1. **Implement the prompt-caching plan** —
-   `docs/plans/main/20260711_prompt_caching.md`. Verify-stage caching alone is
-   most of the dollar win; lens restructure is gated on a fixture-harness run.
-2. **Skim the 37 extras** (need Dan) —
+1. **Skim the 37 extras** (need Dan) —
    `data/harness_out_v9/harness_2026-07-11.md`. Much more tractable than the
    old 102, includes the two real arithmetic bugs; also input for verifier
    calibration.
+2. **Next paid v9 run doubles as the caching measurement** — the INFO
+   cache-usage lines give realized savings for free; also the lens-prompt
+   placement A/B the plan's Q1 deferred.
 
 Still open: adversarial-verify calibration (18 demoted this run vs 23 on
 07-09 — does refutation kill true findings?); OpenAI default pinned to gpt-5.5
@@ -39,6 +36,15 @@ synthesis dedup imperfection (two defects surfaced as match + near-duplicate
 extra); `harness/out/` + `data` symlink untracked (cosmetic).
 
 ## Recent Sessions
+
+- **2026-07-11 (evening)** — Prompt caching implemented (next-action 1,
+  plan steps 1–13; step-14 stretch deferred). TDD: 11 new tests
+  (tuple-form contract, prompt equivalence, per-provider request shapes,
+  priming order both stages), 48/48 green. Live smoke: 63,935/63,948 input
+  tokens cached on call 2. Fixture gate: recall 2/2, 0 gaps. Plan flaw
+  found+fixed: verify stage needs its own priming (distinct cache prefix).
+  Commit `abec241`. Convo:
+  `docs/convos/main/20260711_prompt_caching_implementation.md`.
 
 - **2026-07-11** — Lens upgrades + v9 re-run (next-action 1). Recall
   **10/10** (was 8/10), no regressions; synthesis merged ~100 findings under
