@@ -34,8 +34,11 @@ class ReviewConfig:
     verify_severities: frozenset[str] = frozenset({"HIGH", "MEDIUM"})
     # Hard cap on TOTAL output per call — on Anthropic, adaptive-thinking tokens
     # count against this too. 8192 truncated the synthesis JSON on a 57-finding
-    # fixture run (2026-07-09); 16000 is the non-streaming safe ceiling.
-    max_output_tokens: int = 16000
+    # fixture run (2026-07-09). 16000 was the non-streaming ceiling, but the
+    # Anthropic client always streams now, and empirical-rigor × opus hit 16000
+    # (thinking + recompute evidence) on the 2026-07-11 v9 run — a cap is not
+    # spend, so 32000 buys headroom at zero marginal cost.
+    max_output_tokens: int = 32000
     # Synthesis output scales with finding count (110 findings exceeded 16000
     # on the 2026-07-09 real-paper run), so the synthesis call gets its own,
     # larger cap. Requires streaming on Anthropic (SDK refuses non-streaming
