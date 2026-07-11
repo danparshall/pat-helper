@@ -98,3 +98,22 @@ recall on the fixture.
   pre-restructure, the plan noted savings are already partly banked
 - Carried from 07-11 morning session: the 37-extras skim (needs Dan),
   adversarial-verify calibration, gpt-5.6 default switch
+
+## Handoff (added at session close)
+
+> "Read `docs/convos/main/20260711_prompt_caching_implementation.md`, then run
+> the paid v9 harness (`uv run python harness/run.py data/task_exposure_v9.tex
+> --defects data/defects_task_exposure_v9.yaml --out data/harness_out_v9`) —
+> it doubles as the caching measurement: check the INFO cache-usage lines
+> against the ~$23 → ~$8–10 projection, confirm recall holds at 10/10 (this is
+> the real-paper A/B for the lens-prompt move, plan Q1), and update STATUS
+> with realized savings. Stretch unification (plan step 14) stays deferred."
+
+Caveats attached to the handoff:
+- The `--defects`/`--out` flags were reconstructed from the usage docstring
+  and STATUS data locations — the next agent should `--help` first.
+- The 37-extras skim is Dan's, not an agent's; if the paid run regenerates
+  `data/harness_out_v9/harness_2026-07-11.md`, skim or preserve the old one
+  first.
+- No urgency: nothing is blocked on the paid run (~$8–10 if caching
+  delivers, ~$23 if it doesn't) — fire it when the measurement is wanted.
