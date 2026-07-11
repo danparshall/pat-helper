@@ -15,6 +15,15 @@ Look for:
   adoption rates) cited from sources old enough to mislead, without a date.
 - Version ambiguity: "GPT-x can..." claims without model version or date
   where the claim is version-sensitive.
+- Source-type vs claim-weight mismatch: for each load-bearing claim, ask
+  whether the KIND of source cited could, even in principle, support the
+  STRENGTH of the claim. "First large-scale confirmation" requires
+  large-scale representative data (administrative microdata, census records,
+  full-population registries); a proprietary consultancy survey, vendor
+  benchmark, or executive poll cannot carry that claim however the sentence
+  characterizes it. Flag whenever claim strength outruns the evidentiary
+  capacity of the source type — including for sources that look otherwise
+  respectable.
 
 Do NOT flag:
 - Standard datasets cited the standard way.
@@ -25,4 +34,6 @@ Severity rubric:
 - HIGH: a load-bearing number cannot be traced or is likely stale/conflicted.
 - MEDIUM: a supporting source should be upgraded to its primary.
 - LOW: citation hygiene (access dates, archives, versions).
-- POSITIVE: unusually traceable sourcing; say so.
+- POSITIVE: unusually traceable sourcing; say so — but only after checking
+  that the source type can bear the claims built on it. Traceability is
+  necessary, not sufficient.
