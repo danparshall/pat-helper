@@ -1,39 +1,53 @@
 # STATUS — pat-helper
 
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 ## Current Focus
 
-**Synthesis-at-scale fixed (2026-07-10).** The Anthropic provider now always
-streams, synthesis gets its own 64k cap (`synthesis_max_output_tokens`) on all
-three providers, adaptive thinking stays on, and hitting a cap raises a
-non-retryable `TruncatedOutputError` recorded as an explicit gap. 37 tests
-green; fixture harness re-validated (recall 2/2, 0 gaps, merged report shows
-three-provider convergence). The 110-finding-scale proof is deferred to the
-next paid v9 run, bundled with the lens-prompt upgrades. Convo:
-`docs/convos/main/20260710_synthesis_streaming_fix.md`.
+**Recall 10/10 + synthesis-at-scale proven (2026-07-11).** The lens-prompt
+upgrades (recompute-arithmetic in empirical-rigor, source-type-vs-claim-weight
+in sources) flipped both v9 misses with zero regressions, and the same paid run
+delivered the deferred at-scale proof: ~100 survivors merged to 47 findings
+under the streamed 64k cap, no truncation, convergence recorded. Extras
+102 → 37 (synthesis dedup working). Out-of-sample bonus: the recompute
+directive caught two real arithmetic bugs in the v9 draft (31.6% vs 36.3% D2+;
+23,850 vs 23,852 task counts). One in-session regression fixed: per-lens cap
+raised 16k → 32k after empirical-rigor × opus hit the old cap. 37 tests green.
+Convo: `docs/convos/main/20260711_lens_upgrades_and_v9_rerun.md`.
 
-Prior context: first real recall measurement is 8/10 (10 planted defects in
-`data/task_exposure_v9.tex`, opus-4-8 / gpt-5.5 / gemini-3.1-pro-preview).
-Defects + outputs live in `data/` (gitignored — they quote the unpublished
-draft): `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
+Cost accounting (same session): ~$22–25 per full run, ~two-thirds of it in
+adversarial verify (full paper re-sent per HIGH/MEDIUM finding). Prompt-caching
+plan written: `docs/plans/main/20260711_prompt_caching.md` (~$23 → ~$8–10,
+zero quality tradeoff).
+
+Data locations unchanged: `data/` is gitignored (quotes the unpublished
+draft) — `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
 
 Next actions:
-1. **Lens-prompt upgrades from the two misses** — empirical-rigor should
-   recompute arithmetic (missed 40h="4,800 minutes"; one finding praised the
-   erroneous footnote); sources should test source-type vs claim-weight
-   (missed Census→consultancy swap under a "first large-scale confirmation"
-   claim). Re-run the real-paper harness after edits — that measures the new
-   prompts AND confirms synthesis merges 110+ findings under the 64k cap.
-2. **Skim the 102 extras** (need Dan) — findings matching no planted defect
-   in `data/harness_out_v9/review_2026-07-09.md` are effectively a first AI
-   review of the real v9 draft; also input for verifier calibration.
+1. **Implement the prompt-caching plan** —
+   `docs/plans/main/20260711_prompt_caching.md`. Verify-stage caching alone is
+   most of the dollar win; lens restructure is gated on a fixture-harness run.
+2. **Skim the 37 extras** (need Dan) —
+   `data/harness_out_v9/harness_2026-07-11.md`. Much more tractable than the
+   old 102, includes the two real arithmetic bugs; also input for verifier
+   calibration.
 
-Still open: adversarial-verify calibration (only 23/133 raw findings
-demoted — does refutation kill true findings?), OpenAI default pinned to
-gpt-5.5 pending GPT-5.6 stability.
+Still open: adversarial-verify calibration (18 demoted this run vs 23 on
+07-09 — does refutation kill true findings?); OpenAI default pinned to gpt-5.5
+pending GPT-5.6 stability (cost-neutral: gpt-5.6-sol is the same $5/$30);
+synthesis dedup imperfection (two defects surfaced as match + near-duplicate
+extra); `harness/out/` + `data` symlink untracked (cosmetic).
 
 ## Recent Sessions
+
+- **2026-07-11** — Lens upgrades + v9 re-run (next-action 1). Recall
+  **10/10** (was 8/10), no regressions; synthesis merged ~100 findings under
+  the 64k streamed cap (at-scale proof delivered); recompute directive found
+  two real arithmetic bugs in the draft. Fixed in-session regression:
+  per-lens cap 16k → 32k (`751b364`) after empirical-rigor × opus hit 16k.
+  Cost analysis (~$22–25/run, verify-dominated) → prompt-caching plan
+  (`docs/plans/main/20260711_prompt_caching.md`). Lens commits: `c22ee7d`.
+  Convo: `docs/convos/main/20260711_lens_upgrades_and_v9_rerun.md`.
 
 - **2026-07-10** — Synthesis truncation fix (next-action 1). Decision convo:
   output arithmetic showed streaming was load-bearing (merged JSON alone
