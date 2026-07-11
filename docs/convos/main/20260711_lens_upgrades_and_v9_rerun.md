@@ -95,3 +95,7 @@ adversarial verify is two-thirds of it) and a plan doc for prompt caching.
   finding + near-duplicate extra — cosmetic for recall, but inflates extras
 - `harness/out/` and the `data` symlink remain untracked (cosmetic, flagged
   2026-07-10)
+
+## Captured Tasks
+
+- [#1: [2026-07-11] Review 37 extras from v9 harness run (incl. 2 real arithmetic bugs)](https://github.com/danparshall/pat-helper/issues/1) — captured 2026-07-11
