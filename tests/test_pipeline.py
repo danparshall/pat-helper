@@ -5,6 +5,7 @@ handed (findings / verdict / synthesis), mirroring how the real pipeline
 distinguishes call kinds.
 """
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -13,12 +14,20 @@ from pat_helper.config import ReviewConfig
 from pat_helper.latex import load_paper
 from pat_helper.models import FINDINGS_SCHEMA, SYNTHESIS_SCHEMA, VERDICT_SCHEMA, LensSpec
 from pat_helper.pipeline import run_review
+from pat_helper.prompts import SHARED_HEADER
 from pat_helper.providers.base import Provider, TruncatedOutputError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 GROUNDED_QUOTE = "Standard errors are clustered at the region level."
+SECOND_GROUNDED_QUOTE = "We use a difference-in-differences design with staggered adoption."
 FABRICATED_QUOTE = "This sentence appears nowhere in the manuscript."
+
+
+def _user_text(user) -> str:
+    """Normalize the provider `user` argument (str or (prefix, suffix) tuple)
+    to the full text the model would read."""
+    return "".join(user) if isinstance(user, tuple) else user
 
 
 def make_finding(quote=GROUNDED_QUOTE, severity="HIGH"):
@@ -39,6 +48,7 @@ class FakeProvider(Provider):
         fail_always=False,
         verdict="upheld",
         truncate_synthesis=False,
+        events=None,
     ):
         self.name = name
         self.findings = findings if findings is not None else [make_finding()]
@@ -46,11 +56,12 @@ class FakeProvider(Provider):
         self.fail_always = fail_always
         self.verdict = verdict
         self.truncate_synthesis = truncate_synthesis
+        self.events = events  # shared list of ("start"|"end", provider, kind)
         self.calls = []  # list of (kind, system, user)
         self.call_caps = []  # list of (kind, max_output_tokens)
 
     async def complete_json(
-        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+        self, system: str, user, schema: dict, *, max_output_tokens: int | None = None
     ) -> dict:
         if schema is FINDINGS_SCHEMA:
             kind = "findings"
@@ -62,6 +73,10 @@ class FakeProvider(Provider):
             kind = "unknown"
         self.calls.append((kind, system, user))
         self.call_caps.append((kind, max_output_tokens))
+        if self.events is not None:
+            self.events.append(("start", self.name, kind))
+            await asyncio.sleep(0)  # yield so concurrent calls can interleave
+            self.events.append(("end", self.name, kind))
         if kind == "synthesis" and self.truncate_synthesis:
             raise TruncatedOutputError("output truncated: stop_reason=max_tokens")
         if self.fail_always:
@@ -130,7 +145,7 @@ async def test_refuter_is_never_the_finder(paper):
         for kind, _system, user in p.calls:
             if kind == "verdict":
                 # The verify prompt embeds the finder model's name
-                assert f"model: {p.name}" not in user
+                assert f"model: {p.name}" not in _user_text(user)
 
 
 async def test_ungrounded_findings_are_demoted_and_skip_verification(paper):
@@ -143,7 +158,7 @@ async def test_ungrounded_findings_are_demoted_and_skip_verification(paper):
     for p in (liar, ok):
         for kind, _s, user in p.calls:
             if kind == "verdict":
-                assert FABRICATED_QUOTE not in user
+                assert FABRICATED_QUOTE not in _user_text(user)
 
 
 async def test_synthesis_receives_only_survivors(paper):
@@ -153,7 +168,7 @@ async def test_synthesis_receives_only_survivors(paper):
     synth_calls = [(k, u) for p in (liar, ok) for k, _s, u in p.calls if k == "synthesis"]
     assert synth_calls, "synthesis was never called"
     for _k, user in synth_calls:
-        assert FABRICATED_QUOTE not in user
+        assert FABRICATED_QUOTE not in _user_text(user)
     assert run.findings  # merged output came back
 
 
@@ -201,3 +216,103 @@ async def test_low_severity_findings_skip_verification(paper):
     await run_review(paper, [low, other], lenses(1), config())
     verdict_calls = [k for p in (low, other) for k, _s, _u in p.calls if k == "verdict"]
     assert verdict_calls == []
+
+
+# --- Prompt-caching restructure (docs/plans/main/20260711_prompt_caching.md) ---
+# The paper must be a byte-identical cacheable prefix shared across calls;
+# the volatile part (lens prompt / critique block) follows it.
+
+
+async def test_verify_calls_put_paper_in_cacheable_prefix(paper):
+    finder = FakeProvider("finder")
+    refuter = FakeProvider("refuter")
+    await run_review(paper, [finder, refuter], lenses(1), config())
+    verdict_calls = [(s, u) for p in (finder, refuter) for k, s, u in p.calls if k == "verdict"]
+    assert verdict_calls, "no verify calls were made"
+    for _system, user in verdict_calls:
+        assert isinstance(user, tuple), "verify user prompt must be (cacheable, volatile)"
+        prefix, suffix = user
+        assert prefix == f"# PAPER\n\n{paper.text}"
+        assert "# CRITIQUE" in suffix
+        assert "# CRITIQUE" not in prefix
+
+
+async def test_lens_calls_put_paper_in_prefix_and_lens_in_suffix(paper):
+    prov = FakeProvider("fake-a")
+    lens_list = lenses(2)
+    await run_review(paper, [prov, FakeProvider("fake-b")], lens_list, config())
+    findings_calls = [(s, u) for k, s, u in prov.calls if k == "findings"]
+    assert len(findings_calls) == 2
+    for system, user in findings_calls:
+        # system is the constant shared header — no per-lens text in it
+        assert system == SHARED_HEADER
+        assert isinstance(user, tuple), "lens user prompt must be (cacheable, volatile)"
+        prefix, suffix = user
+        assert prefix == f"# PAPER\n\n{paper.text}"
+    # each call's suffix carries exactly one lens prompt, and every lens is
+    # covered — guards against one lens's text being duplicated into another's
+    # call while its own is dropped
+    suffixes = [u[1] for _s, u in findings_calls]
+    carried = []
+    for s in suffixes:
+        present = [lens.key for lens in lens_list if lens.prompt in s]
+        assert len(present) == 1, f"suffix must carry exactly one lens prompt, got {present}"
+        carried.append(present[0])
+    assert sorted(carried) == sorted(lens.key for lens in lens_list)
+
+
+async def test_reordered_prompts_preserve_all_content_exactly_once(paper):
+    """Guard against dropping or duplicating content while reordering: what
+    the model reads (system + full user text) must contain the paper, the
+    lens text, and the critique content exactly once."""
+    prov_a, prov_b = FakeProvider("fake-a"), FakeProvider("fake-b")
+    lens_list = lenses(1)
+    await run_review(paper, [prov_a, prov_b], lens_list, config())
+    for p in (prov_a, prov_b):
+        for kind, system, user in p.calls:
+            full = system + _user_text(user)
+            if kind == "findings":
+                assert full.count(paper.text) == 1
+                assert full.count(lens_list[0].prompt) == 1
+                assert full.count(SHARED_HEADER) == 1
+            elif kind == "verdict":
+                assert full.count(paper.text) == 1
+                # critique block content (evidence text appears once)
+                assert full.count("Test evidence for this critique.") == 1
+
+
+def _barrier_respected(events, kind, n):
+    """True iff the first n `kind` calls (the priming batch) all end before
+    any further `kind` call starts."""
+    seq = [e for e in events if e[2] == kind]
+    start_pos = [i for i, e in enumerate(seq) if e[0] == "start"]
+    end_pos = [i for i, e in enumerate(seq) if e[0] == "end"]
+    if len(start_pos) <= n:
+        return True  # nothing beyond the priming batch
+    return start_pos[n] > end_pos[n - 1]
+
+
+async def test_first_lens_cell_per_provider_completes_before_fan_out(paper):
+    """Cache priming: one findings call per provider must complete (writing
+    the cache entry) before the remaining fan-out calls launch."""
+    events = []
+    provs = [FakeProvider("fake-a", events=events), FakeProvider("fake-b", events=events)]
+    await run_review(paper, provs, lenses(4), config())
+    seq = [e for e in events if e[2] == "findings"]
+    starts = [e for e in seq if e[0] == "start"]
+    # the priming batch covers every provider (one cell each)
+    assert {e[1] for e in starts[: len(provs)]} == {p.name for p in provs}
+    assert _barrier_respected(events, "findings", len(provs))
+
+
+async def test_first_verify_call_per_refuter_completes_before_fan_out(paper):
+    """Verify calls have their own cache prefix (different system prompt), so
+    the verify stage must prime per refuter too."""
+    events = []
+    findings = [make_finding(), make_finding(quote=SECOND_GROUNDED_QUOTE)]
+    prov_a = FakeProvider("fake-a", findings=list(findings), events=events)
+    prov_b = FakeProvider("fake-b", findings=list(findings), events=events)
+    await run_review(paper, [prov_a, prov_b], lenses(1), config())
+    verdicts = [e for e in events if e[2] == "verdict" and e[0] == "start"]
+    assert len(verdicts) == 4, "expected 2 HIGH findings per provider to be verified"
+    assert _barrier_respected(events, "verdict", 2)  # one priming call per refuter

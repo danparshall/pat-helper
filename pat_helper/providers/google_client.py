@@ -8,14 +8,21 @@
   accepts standard JSON Schema per the SDK docstring.
 - google-genai does NOT auto-retry by default (verified in SDK source) —
   retry options are enabled explicitly here.
+- Implicit context caching is automatic on repeated prefixes — the
+  (prefix, suffix) user form is just concatenated; identical prefix
+  ordering is the whole game (cached input ~$0.20/MTok on gemini-3.1-pro).
 """
 
 from __future__ import annotations
 
+import logging
+
 from google import genai
 from google.genai import types
 
-from pat_helper.providers.base import Provider, TruncatedOutputError, parse_json_strict
+from pat_helper.providers.base import Provider, TruncatedOutputError, parse_json_strict, user_text
+
+log = logging.getLogger("pat_helper")
 
 
 class GoogleProvider(Provider):
@@ -34,12 +41,17 @@ class GoogleProvider(Provider):
         )
 
     async def complete_json(
-        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+        self,
+        system: str,
+        user: str | tuple[str, str],
+        schema: dict,
+        *,
+        max_output_tokens: int | None = None,
     ) -> dict:
         cap = max_output_tokens or self.max_output_tokens
         response = await self._client.aio.models.generate_content(
             model=self.model,
-            contents=user,
+            contents=user_text(user),
             config=types.GenerateContentConfig(
                 system_instruction=system,
                 max_output_tokens=cap,
@@ -47,6 +59,12 @@ class GoogleProvider(Provider):
                 response_json_schema=schema,
             ),
         )
+        meta = getattr(response, "usage_metadata", None)
+        total = getattr(meta, "prompt_token_count", 0) or 0
+        cached = getattr(meta, "cached_content_token_count", 0) or 0
+        self.cached_input_tokens += cached
+        self.uncached_input_tokens += total - cached
+        log.debug("google cache: read=%d uncached=%d", cached, total - cached)
         truncated = (
             response.candidates
             and response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS

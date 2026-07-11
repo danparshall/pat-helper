@@ -19,15 +19,34 @@ class TruncatedOutputError(RuntimeError):
 
 class Provider(ABC):
     name: str
+    # Cache-usage accounting (updated per call, read for the run summary).
+    cached_input_tokens: int = 0
+    uncached_input_tokens: int = 0
 
     @abstractmethod
     async def complete_json(
-        self, system: str, user: str, schema: dict, *, max_output_tokens: int | None = None
+        self,
+        system: str,
+        user: str | tuple[str, str],
+        schema: dict,
+        *,
+        max_output_tokens: int | None = None,
     ) -> dict:
         """Run one completion forced to match `schema`; return the parsed object.
 
+        `user` is either a plain prompt string or `(cacheable_prefix,
+        volatile_suffix)`: the prefix is byte-identical across calls (the
+        paper) and marked as a cache breakpoint on Anthropic; OpenAI and
+        Gemini cache repeated prefixes automatically, so they just read the
+        concatenation. The model always sees prefix + suffix, in that order.
+
         `max_output_tokens` overrides the provider's default cap for this call
         (used by synthesis, whose output scales with finding count)."""
+
+
+def user_text(user: str | tuple[str, str]) -> str:
+    """Flatten the user prompt to the single string the model reads."""
+    return "".join(user) if isinstance(user, tuple) else user
 
 
 def parse_json_strict(text: str) -> dict:

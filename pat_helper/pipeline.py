@@ -69,19 +69,25 @@ def _parse_findings(payload: dict, lens: LensSpec, model: str) -> list[Finding]:
 
 
 async def _run_cell(
-    paper_user_prompt: str,
+    paper_prefix: str,
     lens: LensSpec,
     provider: Provider,
     config: ReviewConfig,
     sem: asyncio.Semaphore,
 ) -> tuple[list[Finding], str | None]:
-    """Run one lens × model cell. Returns (findings, gap-or-None)."""
-    system = SHARED_HEADER + "\n" + lens.prompt
+    """Run one lens × model cell. Returns (findings, gap-or-None).
+
+    Prompt order is cache-shaped: the system prompt is the constant
+    SHARED_HEADER and the paper is the first (cacheable) user block; the
+    per-lens instruction follows the paper, so every lens call on a provider
+    shares one cached prefix."""
+    system = SHARED_HEADER
+    user = (paper_prefix, f"\n\n# YOUR LENS\n\n{lens.prompt}")
     try:
         async with sem:
             payload = await _with_retries(
                 config,
-                lambda: provider.complete_json(system, paper_user_prompt, FINDINGS_SCHEMA),
+                lambda: provider.complete_json(system, user, FINDINGS_SCHEMA),
             )
         return _parse_findings(payload, lens, provider.name), None
     except Exception as exc:  # noqa: BLE001
@@ -108,7 +114,8 @@ async def _verify(
     config: ReviewConfig,
     sem: asyncio.Semaphore,
 ) -> None:
-    user = f"# PAPER\n\n{paper_text}\n\n{_critique_block(finding)}"
+    # Same paper prefix as the lens calls; only the critique varies per call.
+    user = (f"# PAPER\n\n{paper_text}", f"\n\n{_critique_block(finding)}")
     try:
         async with sem:
             payload = await _with_retries(
@@ -130,16 +137,22 @@ async def run_review(
 ) -> ReviewRun:
     run = ReviewRun(paper_name=paper.name)
     sem = asyncio.Semaphore(config.concurrency)
-    paper_user_prompt = f"# PAPER\n\n{paper.text}"
+    paper_prefix = f"# PAPER\n\n{paper.text}"
 
     # --- Stage 1: fan out lens × model cells ---
-    cell_results = await asyncio.gather(
-        *(
-            _run_cell(paper_user_prompt, lens, provider, config, sem)
-            for lens in lenses
-            for provider in providers
-        )
+    # Cache priming: a cache entry is readable only once the writing request
+    # has started streaming, so N concurrent identical-prefix calls all miss.
+    # Run the first cell per provider to completion (writing the entry), then
+    # fan out the rest — costs ~1 call of latency, the fan-out reads the cache.
+    pairs = [(lens, provider) for lens in lenses for provider in providers]
+    n_prime = min(len(providers), len(pairs))  # lens-major order: one cell per provider
+    prime_results = await asyncio.gather(
+        *(_run_cell(paper_prefix, lens, prov, config, sem) for lens, prov in pairs[:n_prime])
     )
+    rest_results = await asyncio.gather(
+        *(_run_cell(paper_prefix, lens, prov, config, sem) for lens, prov in pairs[n_prime:])
+    )
+    cell_results = list(prime_results) + list(rest_results)
     raw_findings: list[Finding] = []
     healthy: dict[str, bool] = {}
     idx = 0
@@ -167,20 +180,30 @@ async def run_review(
             run.demoted.append(f)
 
     # --- Stage 3: adversarial verify (different model refutes) ---
+    # The verify system prompt differs from the lens one, so verify calls have
+    # their OWN cache prefix — prime it per refuter (first call runs alone),
+    # exactly as stage 1 primes the lens prefix.
     by_name = {p.name: i for i, p in enumerate(providers)}
     if len(providers) > 1:
         to_verify = [f for f in grounded if str(f.severity) in config.verify_severities]
+
+        def refuter_of(f: Finding) -> Provider:
+            return providers[(by_name[f.model] + 1) % len(providers)]
+
+        primed: set[str] = set()
+        prime_batch: list[Finding] = []
+        rest_batch: list[Finding] = []
+        for f in to_verify:
+            if refuter_of(f).name in primed:
+                rest_batch.append(f)
+            else:
+                primed.add(refuter_of(f).name)
+                prime_batch.append(f)
         await asyncio.gather(
-            *(
-                _verify(
-                    paper.text,
-                    f,
-                    providers[(by_name[f.model] + 1) % len(providers)],
-                    config,
-                    sem,
-                )
-                for f in to_verify
-            )
+            *(_verify(paper.text, f, refuter_of(f), config, sem) for f in prime_batch)
+        )
+        await asyncio.gather(
+            *(_verify(paper.text, f, refuter_of(f), config, sem) for f in rest_batch)
         )
     survivors = []
     for f in grounded:
@@ -190,48 +213,55 @@ async def run_review(
             survivors.append(f)
 
     # --- Stage 4: synthesis (dedup / merge / rank) ---
-    if not survivors:
-        return run
-    synth_provider = next((p for p in providers if healthy.get(p.name)), providers[0])
-    user = "# VERIFIED FINDINGS\n\n" + json.dumps(
-        [f.to_json() for f in survivors], indent=2, ensure_ascii=False
-    )
-    try:
-        payload = await _with_retries(
-            config,
-            lambda: synth_provider.complete_json(
-                synthesis_prompt(),
-                user,
-                SYNTHESIS_SCHEMA,
-                max_output_tokens=config.synthesis_max_output_tokens,
-            ),
+    if survivors:
+        synth_provider = next((p for p in providers if healthy.get(p.name)), providers[0])
+        user = "# VERIFIED FINDINGS\n\n" + json.dumps(
+            [f.to_json() for f in survivors], indent=2, ensure_ascii=False
         )
-        merged = []
-        for item in payload["findings"]:
-            models = item.get("models") or []
-            f = Finding(
-                lens=item["lens"],
-                model=models[0] if models else synth_provider.name,
-                quote=item["quote"],
-                evidence=item["evidence"],
-                severity=Severity(item["severity"]),
-                suggested_fix=item["suggested_fix"],
-                models=models,
+        try:
+            payload = await _with_retries(
+                config,
+                lambda: synth_provider.complete_json(
+                    synthesis_prompt(),
+                    user,
+                    SYNTHESIS_SCHEMA,
+                    max_output_tokens=config.synthesis_max_output_tokens,
+                ),
             )
-            # Re-ground merged quotes (synthesis must not alter quotes; trust but verify)
-            match = check_quote(f.quote, paper, config.fuzzy_threshold)
-            f.grounded = match.found
-            f.grounding_score = match.score
-            f.location_label = match.location.label if match.location else None
-            if match.found:
-                merged.append(f)
-            else:
-                f.verify_notes = "synthesis altered the quote; demoted"
-                run.demoted.append(f)
-        run.findings = merged
-    except Exception as exc:  # noqa: BLE001
-        run.gaps.append(
-            f"synthesis × {synth_provider.name}: failed ({exc}); passing through unmerged"
+            merged = []
+            for item in payload["findings"]:
+                models = item.get("models") or []
+                f = Finding(
+                    lens=item["lens"],
+                    model=models[0] if models else synth_provider.name,
+                    quote=item["quote"],
+                    evidence=item["evidence"],
+                    severity=Severity(item["severity"]),
+                    suggested_fix=item["suggested_fix"],
+                    models=models,
+                )
+                # Re-ground merged quotes (synthesis must not alter quotes; trust but verify)
+                match = check_quote(f.quote, paper, config.fuzzy_threshold)
+                f.grounded = match.found
+                f.grounding_score = match.score
+                f.location_label = match.location.label if match.location else None
+                if match.found:
+                    merged.append(f)
+                else:
+                    f.verify_notes = "synthesis altered the quote; demoted"
+                    run.demoted.append(f)
+            run.findings = merged
+        except Exception as exc:  # noqa: BLE001
+            run.gaps.append(
+                f"synthesis × {synth_provider.name}: failed ({exc}); passing through unmerged"
+            )
+            run.findings = survivors
+
+    for p in providers:
+        log.info(
+            "cache usage %s: cached_input_tokens=%d uncached_input_tokens=%d",
+            p.name,
+            p.cached_input_tokens,
+            p.uncached_input_tokens,
         )
-        run.findings = survivors
     return run
