@@ -1,41 +1,76 @@
 # STATUS — pat-helper
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 ## Current Focus
 
-**Prompt caching implemented (2026-07-11 evening, `abec241`).** The paper is
-now a cacheable shared prefix across the lens fan-out AND adversarial verify
-(plan steps 1–13; stretch unification deferred). Live smoke: 99.98% of input
-tokens read from cache on the second identical-prefix opus call. Fixture
-harness gate after the lens-prompt restructure: recall 2/2, 0 gaps. 48 tests
-green (11 new). One plan flaw found+fixed in implementation: verify calls have
-their own cache prefix (different system prompt), so the verify stage primes
-per refuter — priming only the lens stage would have forfeited the verify-stage
-savings (two-thirds of run cost). Realized $ savings now observable via a
-per-run INFO cache-usage summary; expect ~$23 → ~$8–10 or better on the next
-paid v9 run (the flattened v9 paper is ~64k tokens, not the plan's ~44k).
-Convo: `docs/convos/main/20260711_prompt_caching_implementation.md`.
+**Caching measured for real: input-side $24.42 → $5.82 (76% saved), recall
+10/10 (2026-07-12 paid v9 run).** Per-provider cache hit rates: anthropic
+89.7%, openai 85.8%, google 83.1% of input tokens — the ~$23 → ~$8–10
+projection is confirmed (realized input spend $5.82 + output). OpenAI/Gemini
+implicit caching is now measurably working under our call pattern. Numbers
+assume openai cached=0.1× and gemini cached=0.25× published discounts;
+anthropic figure slightly understates cost (cache-write 1.25× premium folded
+into the uncached bucket, bound ≤ $0.24).
+
+It took two paid runs to get the measurement. **Run 1 (07-11 evening): the
+INFO cache-usage lines never appeared** — no entry point ever configured
+logging, so Python's default WARNING handler silently dropped the summary
+(the 07-11 live smoke worked only because it was an ad-hoc script). Root
+caused + fixed via TDD in `b314bcf` (`configure_logging()` on the package
+logger, wired into cli.py and harness/run.py; 50/50 green). Run 1 also came
+in at **recall 8/10**, which decomposed instructively:
+
+- `model-versions-removed` was **found by the lens then refuted by the
+  google adversarial verifier**, which cited the paper's own
+  replication-package self-claims as ground truth — circular. First
+  confirmed instance of the "does refutation kill true findings?" worry,
+  and it cost a recall point. The same finding survived verify in both the
+  morning run and run 2 → verifier stochasticity, not the caching change
+  (verify prompts are byte-identical pre/post-restructure).
+- `beta-construct-swap` was genuinely missed in run 1 (no trace anywhere),
+  hit in the morning run and run 2 → lens stochasticity.
+- Finding volume was stable across all three runs (37/43/44 issues) — the
+  lens-instruction move out of `system` did not thin coverage.
+
+So plan Q1 (real-paper A/B of the lens-prompt move) resolves **quality-
+neutral**: 10/10 post-restructure, and run 1's dip is attributable to
+per-run noise, one point of it specifically to verify miscalibration.
+Convo: `docs/convos/main/20260712_paid_v9_caching_measurement.md`.
 
 Data locations unchanged: `data/` is gitignored (quotes the unpublished
 draft) — `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
+The 07-11 morning outputs are preserved as
+`*_2026-07-11_morning_lens_upgrades.md` (backed up before the same-date
+rerun would have clobbered them).
 
 Next actions:
-1. **Skim the 37 extras** (need Dan) —
-   `data/harness_out_v9/harness_2026-07-11.md`. Much more tractable than the
-   old 102, includes the two real arithmetic bugs; also input for verifier
-   calibration.
-2. **Next paid v9 run doubles as the caching measurement** — the INFO
-   cache-usage lines give realized savings for free; also the lens-prompt
-   placement A/B the plan's Q1 deferred.
+1. **Adversarial-verify calibration is now the top item** — it has a
+   confirmed true-kill with a reproducible failure mode (verifier treats
+   the paper's self-claims as ground truth when refuting). The demoted
+   appendices of all three 07-11/07-12 runs are the calibration corpus.
+2. **Skim the extras** (need Dan) — morning backup
+   `harness_2026-07-11_morning_lens_upgrades.md` (37 extras) and/or the
+   fresh `harness_2026-07-12.md`; also input for verifier calibration.
 
-Still open: adversarial-verify calibration (18 demoted this run vs 23 on
-07-09 — does refutation kill true findings?); OpenAI default pinned to gpt-5.5
-pending GPT-5.6 stability (cost-neutral: gpt-5.6-sol is the same $5/$30);
-synthesis dedup imperfection (two defects surfaced as match + near-duplicate
-extra); `harness/out/` + `data` symlink untracked (cosmetic).
+Still open: OpenAI default pinned to gpt-5.5 pending GPT-5.6 stability
+(cost-neutral: gpt-5.6-sol is the same $5/$30); synthesis dedup imperfection
+(two defects surfaced as match + near-duplicate extra); stretch unification
+of verify under SHARED_HEADER (plan step 14) still deferred — now a pure
+optimization (~one extra cache entry per provider); `harness/out/` + `data`
+symlink untracked (cosmetic).
 
 ## Recent Sessions
+
+- **2026-07-12** — Paid v9 caching measurement (next-action 2). Two runs:
+  run 1 hit a swallowed-INFO logging bug (no entry point configured logging;
+  fixed via TDD, `b314bcf`, 50/50 green) and recall 8/10 — decomposed into
+  one verify true-kill (google refuter cited the paper's own replication-
+  package claims; first confirmed "refutation kills true findings" instance)
+  and one lens miss. Run 2: **recall 10/10**, realized input-side **$24.42 →
+  $5.82 (76% saved)**; hit rates 89.7/85.8/83.1% (anthropic/openai/google).
+  Plan Q1 resolves quality-neutral. Verify calibration promoted to top item.
+  Convo: `docs/convos/main/20260712_paid_v9_caching_measurement.md`.
 
 - **2026-07-11 (evening)** — Prompt caching implemented (next-action 1,
   plan steps 1–13; step-14 stretch deferred). TDD: 11 new tests
