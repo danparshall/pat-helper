@@ -106,6 +106,42 @@ be visible where it matters, synthesis needs an explicit passthrough.
 - Replay cache hit (google, 16 calls): 550k cached / 129k uncached input
   tokens (~81%).
 
+## Follow-on design: source-check stage ("strict mode") — brainstormed same session
+
+Dan proposed strict/relaxed modes: strict fires a checker that reads the
+cited source and verifies the claim. Brainstorm (structured, incremental)
+refined this into **stage 3.5: source-check**, implemented on branch
+`source-check`:
+
+- Reframed strict/relaxed from "different verdict rules" to "whether a
+  resolution stage runs" — verdict semantics stay fixed for run-to-run
+  comparability; `unverifiable` findings form the work queue
+- Retrieval: **local-first** — author supplies a flat dir of extracted-text
+  files; no PDFs in v1, no web in v1 (web fallback deferred)
+- Generalizability fix (Dan's catch: "great for ME, but how flexible for
+  others?"): match citations against a **content-built index** (cheap-model
+  read of each file's head → `{authors, year, title}`, cached to a
+  `sources_index.json` sidecar keyed by file hash), NOT against filename
+  conventions — filenames become irrelevant
+- Authority: **auto-resolve** — critique-confirmed → upheld;
+  critique-contradicted → refuted (demoted with exonerating source quote);
+  unresolved → stays unverifiable. Chosen over annotate-only and
+  asymmetric-upgrade-only variants
+- Two mechanical gates before any verdict is honored (both reuse
+  quotecheck, zero API cost): source_quote must ground against the source
+  text; checker-read identity must match the citation — an index error can
+  cost a check, never cause a silent wrong-source demotion
+- Checker = third provider in rotation (≠ finder, ≠ refuter) where possible
+- Approach A (per-finding pipeline call, cache-shaped per source) chosen
+  over agentic subagent (B) and per-source batching (C); C noted as a free
+  later optimization, B's real advantage (web fallback) obtainable later
+  without an agent loop
+- Validation: fixture harness citation-mismatch defect + the two live
+  specimens (Svanberg 2024, Davidson 2026) from the reverify replay,
+  adjudicated by Dan
+- Plan: `docs/active/source-check/plans/20260714_source_check_stage.md`
+  (on the branch)
+
 ## Open Questions
 
 - Does the new prompt overcorrect — flag as `unverifiable` critiques that a

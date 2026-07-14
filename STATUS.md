@@ -60,6 +60,12 @@ of verify under SHARED_HEADER (plan step 14) still deferred — now a pure
 optimization (~one extra cache entry per provider); `harness/out/` + `data`
 symlink untracked (cosmetic).
 
+## Active Research Lines
+
+| Branch | Status | Summary |
+|--------|--------|---------|
+| `source-check` | active | Stage 3.5 "strict mode": resolve `unverifiable` findings by checking the paper's characterization of cited sources against author-supplied extracted texts (local-first, content-indexed, double-gated). Design: `docs/convos/main/20260713_unverifiable_verdict_design.md`. |
+
 ## Recent Sessions
 
 - **2026-07-12** — Paid v9 caching measurement (next-action 2). Two runs:
