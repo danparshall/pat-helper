@@ -48,6 +48,7 @@ class FakeProvider(Provider):
         fail_always=False,
         verdict="upheld",
         truncate_synthesis=False,
+        synthesis_echo=None,
         events=None,
     ):
         self.name = name
@@ -56,6 +57,7 @@ class FakeProvider(Provider):
         self.fail_always = fail_always
         self.verdict = verdict
         self.truncate_synthesis = truncate_synthesis
+        self.synthesis_echo = synthesis_echo  # explicit synthesis output override
         self.events = events  # shared list of ("start"|"end", provider, kind)
         self.calls = []  # list of (kind, system, user)
         self.call_caps = []  # list of (kind, max_output_tokens)
@@ -89,6 +91,8 @@ class FakeProvider(Provider):
         if kind == "verdict":
             return {"verdict": self.verdict, "reasoning": "because"}
         if kind == "synthesis":
+            if self.synthesis_echo is not None:
+                return {"findings": self.synthesis_echo}
             # Echo back merged findings: one merged finding crediting two models
             return {
                 "findings": [
@@ -178,6 +182,62 @@ async def test_refuted_findings_are_demoted_not_deleted(paper):
     run = await run_review(paper, [finder, refuter], lenses(1), config())
     # finder's HIGH finding gets refuted by the other provider -> demoted
     assert any(f.verified == "refuted" for f in run.demoted)
+
+
+async def test_unverifiable_findings_stay_in_main_report(paper):
+    """A critique the refuter cannot check against the text (the paper merely
+    asserts the material exists in an external artifact) must NOT be demoted —
+    it survives to synthesis at full severity, tagged unverifiable."""
+    finder = FakeProvider("finder")
+    refuter = FakeProvider("refuter", verdict="unverifiable")
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert run.demoted == []
+    # The finding reached synthesis carrying its verdict
+    synth_calls = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth_calls, "synthesis was never called"
+    assert '"verified": "unverifiable"' in _user_text(synth_calls[0])
+
+
+async def test_synthesis_input_includes_verified_state(paper):
+    """Survivors' verification state is part of the synthesis contract —
+    without it the merge cannot preserve verdicts."""
+    finder = FakeProvider("finder")
+    refuter = FakeProvider("refuter")  # default verdict: upheld
+    await run_review(paper, [finder, refuter], lenses(1), config())
+    synth_calls = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth_calls, "synthesis was never called"
+    assert '"verified": "upheld"' in _user_text(synth_calls[0])
+
+
+async def test_synthesis_preserves_verified_state(paper):
+    """Verification state must survive the synthesis merge into the final
+    report: 'unverifiable' passes through; the 'none' sentinel maps to None."""
+    echo = [
+        {**make_finding(), "lens": "l0", "models": ["finder"], "verified": "unverifiable"},
+        {
+            **make_finding(quote=SECOND_GROUNDED_QUOTE),
+            "lens": "l0",
+            "models": ["refuter"],
+            "verified": "none",
+        },
+    ]
+    finder = FakeProvider("finder", synthesis_echo=echo)
+    refuter = FakeProvider("refuter", verdict="unverifiable")
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    by_quote = {f.quote: f for f in run.findings}
+    assert by_quote[GROUNDED_QUOTE].verified == "unverifiable"
+    assert by_quote[SECOND_GROUNDED_QUOTE].verified is None
+
+
+def test_verdict_schema_and_verify_prompt_agree():
+    """Every verdict the schema permits must be defined in the refuter prompt —
+    a verdict the prompt never explains will never be returned."""
+    from pat_helper.models import VERDICT_SCHEMA as vs
+    from pat_helper.prompts import verify_prompt
+
+    prompt = verify_prompt()
+    for verdict in vs["properties"]["verdict"]["enum"]:
+        assert f'"{verdict}"' in prompt, f"verdict {verdict!r} not defined in _verify.md"
 
 
 async def test_synthesis_call_carries_the_synthesis_output_cap(paper):

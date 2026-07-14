@@ -73,6 +73,29 @@ def test_ungrounded_findings_go_to_appendix_not_main_body():
     assert out.index("hallucinated critique") > appendix_start
 
 
+def test_unverifiable_finding_renders_with_check_artifact_tag():
+    """An unverifiable finding is a promissory note the paper wrote — it must
+    render in the main body (not the appendix) with an explicit prompt to
+    check the external artifact, at full severity."""
+    conditional = _finding(
+        evidence="version pins asserted to live in the replication package",
+        verified="unverifiable",
+        verify_notes="[google] The paper states the details are in the replication package.",
+    )
+    refuted = _finding(
+        evidence="a genuinely refuted critique",
+        verified="refuted",
+    )
+    out = render(_run([conditional], demoted=[refuted]))
+    appendix_start = out.index("Appendix")
+    body = out[:appendix_start]
+    assert "version pins asserted" in body
+    assert "unverifiable" in body
+    assert "check external artifact" in body
+    # The tag is specific to unverifiable findings, not verification generally
+    assert "check external artifact" not in out[appendix_start:]
+
+
 def test_coverage_gaps_are_reported():
     out = render(_run([_finding()], gaps=["causal-id × gpt: failed after retries"]))
     assert "causal-id × gpt" in out

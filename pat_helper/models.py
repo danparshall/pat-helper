@@ -49,7 +49,7 @@ class Finding:
     grounded: bool | None = None
     grounding_score: float | None = None
     location_label: str | None = None
-    verified: str | None = None  # "upheld" | "softened" | "refuted" | None
+    verified: str | None = None  # "upheld" | "softened" | "refuted" | "unverifiable" | None
     verify_notes: str | None = None
     models: list[str] = field(default_factory=list)  # all contributing models
 
@@ -109,7 +109,10 @@ FINDINGS_SCHEMA: dict = {
 VERDICT_SCHEMA: dict = {
     "type": "object",
     "properties": {
-        "verdict": {"type": "string", "enum": ["upheld", "softened", "refuted"]},
+        "verdict": {
+            "type": "string",
+            "enum": ["upheld", "softened", "refuted", "unverifiable"],
+        },
         "reasoning": {"type": "string"},
     },
     "required": ["verdict", "reasoning"],
@@ -127,8 +130,22 @@ SYNTHESIS_SCHEMA: dict = {
                     **_FINDING_PROPS,
                     "lens": {"type": "string"},
                     "models": {"type": "array", "items": {"type": "string"}},
+                    # String sentinel "none" rather than a JSON-null union:
+                    # Gemini's structured-output path chokes on union types.
+                    "verified": {
+                        "type": "string",
+                        "enum": ["upheld", "softened", "refuted", "unverifiable", "none"],
+                    },
                 },
-                "required": ["quote", "evidence", "severity", "suggested_fix", "lens", "models"],
+                "required": [
+                    "quote",
+                    "evidence",
+                    "severity",
+                    "suggested_fix",
+                    "lens",
+                    "models",
+                    "verified",
+                ],
                 "additionalProperties": False,
             },
         }

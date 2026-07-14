@@ -18,3 +18,8 @@ Rules:
    first within each level.
 6. Convergence across models is weak evidence of validity, not proof — do not
    inflate severity just because several models agree.
+7. Every input finding carries a "verified" state. Set the merged finding's
+   "verified" to the most conservative among its contributors —
+   "unverifiable" > "softened" > "upheld" > "none" (use the string "none"
+   when no contributor was verified). Never invent a state and never drop
+   one: a finding flagged "unverifiable" stays "unverifiable" after merging.

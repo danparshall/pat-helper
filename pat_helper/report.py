@@ -22,6 +22,15 @@ _SEVERITY_TITLES = {
 def _render_finding(f: Finding) -> str:
     models = ", ".join(f.models or [f.model])
     loc = f" — `{f.location_label}`" if f.location_label else ""
+    if f.verified == "unverifiable":
+        # A promissory note: the paper asserts the material exists in an
+        # artifact the reviewer cannot inspect. Full severity; author checks.
+        verification = (
+            " · *verification:* unverifiable — **check external artifact:** the paper"
+            " asserts this material exists outside the text; confirm it does"
+        )
+    else:
+        verification = f" · *verification:* {f.verified}" if f.verified else ""
     lines = [
         f"### [{f.lens}]{loc}",
         "",
@@ -33,7 +42,7 @@ def _render_finding(f: Finding) -> str:
         "",
         f"*Models:* {models}"
         + (f" · *grounding:* {f.grounding_score:.2f}" if f.grounding_score is not None else "")
-        + (f" · *verification:* {f.verified}" if f.verified else ""),
+        + verification,
     ]
     if f.verify_notes:
         lines.append(f"  *notes:* {f.verify_notes}")

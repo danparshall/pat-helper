@@ -231,6 +231,7 @@ async def run_review(
             merged = []
             for item in payload["findings"]:
                 models = item.get("models") or []
+                verified = item.get("verified", "none")
                 f = Finding(
                     lens=item["lens"],
                     model=models[0] if models else synth_provider.name,
@@ -239,6 +240,7 @@ async def run_review(
                     severity=Severity(item["severity"]),
                     suggested_fix=item["suggested_fix"],
                     models=models,
+                    verified=None if verified == "none" else verified,
                 )
                 # Re-ground merged quotes (synthesis must not alter quotes; trust but verify)
                 match = check_quote(f.quote, paper, config.fuzzy_threshold)
