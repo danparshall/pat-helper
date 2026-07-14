@@ -22,3 +22,4 @@ data/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
+.worktrees/
