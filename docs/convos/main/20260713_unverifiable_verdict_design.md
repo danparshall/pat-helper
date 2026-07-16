@@ -77,6 +77,11 @@ be visible where it matters, synthesis needs an explicit passthrough.
 - Out of scope: refuter rotation (confounded with the prompt change),
   package-audit aggregation (synthesis dedup wart first)
 - Plan: `docs/plans/main/20260713_unverifiable_verdict.md`
+- Session close: source-check work proceeds on branch `source-check`
+  (worktree `.worktrees/source-check`, pushed); plan written and committed
+  (`b81b572`) — **implementation NOT started**, plan is written for a
+  zero-context pickup. Verdict work fully landed on main
+  (`77ffc4e`, `129aa73`)
 
 ## Results
 

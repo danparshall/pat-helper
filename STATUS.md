@@ -1,64 +1,43 @@
 # STATUS — pat-helper
 
-Last updated: 2026-07-12
+Last updated: 2026-07-14
 
 ## Current Focus
 
-**Caching measured for real: input-side $24.42 → $5.82 (76% saved), recall
-10/10 (2026-07-12 paid v9 run).** Per-provider cache hit rates: anthropic
-89.7%, openai 85.8%, google 83.1% of input tokens — the ~$23 → ~$8–10
-projection is confirmed (realized input spend $5.82 + output). OpenAI/Gemini
-implicit caching is now measurably working under our call pattern. Numbers
-assume openai cached=0.1× and gemini cached=0.25× published discounts;
-anthropic figure slightly understates cost (cache-write 1.25× premium folded
-into the uncached bucket, bound ≤ $0.24).
+**Adversarial-verify calibration: first fix landed and measured.** The
+`unverifiable` verdict (main, `77ffc4e`) stops paper self-claims from
+refuting critiques; verification state now survives synthesis; renderer
+tags these "check external artifact" at full severity. Calibration replay
+(`harness/reverify.py`, run 1's 18 refuted findings, same refuters):
+13 refuted / 3 unverifiable / 1 softened / 1 upheld — **both** pure
+self-claim true-kills now survive to the main report (the third suspected
+kill turned out to be a legitimate in-text refutation on re-read), no mass
+overcorrection. Run 1 would have scored 9/10.
 
-It took two paid runs to get the measurement. **Run 1 (07-11 evening): the
-INFO cache-usage lines never appeared** — no entry point ever configured
-logging, so Python's default WARNING handler silently dropped the summary
-(the 07-11 live smoke worked only because it was an ad-hoc script). Root
-caused + fixed via TDD in `b314bcf` (`configure_logging()` on the package
-logger, wired into cli.py and harness/run.py; 50/50 green). Run 1 also came
-in at **recall 8/10**, which decomposed instructively:
+Next: branch `source-check` (plan ready, implementation not started) —
+stage 3.5 "strict mode" resolves `unverifiable` findings against
+author-supplied source texts. Start at
+`docs/active/source-check/plans/20260714_source_check_stage.md`.
 
-- `model-versions-removed` was **found by the lens then refuted by the
-  google adversarial verifier**, which cited the paper's own
-  replication-package self-claims as ground truth — circular. First
-  confirmed instance of the "does refutation kill true findings?" worry,
-  and it cost a recall point. The same finding survived verify in both the
-  morning run and run 2 → verifier stochasticity, not the caching change
-  (verify prompts are byte-identical pre/post-restructure).
-- `beta-construct-swap` was genuinely missed in run 1 (no trace anywhere),
-  hit in the morning run and run 2 → lens stochasticity.
-- Finding volume was stable across all three runs (37/43/44 issues) — the
-  lens-instruction move out of `system` did not thin coverage.
-
-So plan Q1 (real-paper A/B of the lens-prompt move) resolves **quality-
-neutral**: 10/10 post-restructure, and run 1's dip is attributable to
-per-run noise, one point of it specifically to verify miscalibration.
-Convo: `docs/convos/main/20260712_paid_v9_caching_measurement.md`.
+Still needing Dan: the extras/demoted skim (carried since 07-12; now also
+ground-truth labels for verify calibration — are the 13 still-refuted all
+genuinely bad?); Svanberg 2024 + Davidson 2026 PDFs for the source-check
+live specimens.
 
 Data locations unchanged: `data/` is gitignored (quotes the unpublished
-draft) — `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`.
-The 07-11 morning outputs are preserved as
-`*_2026-07-11_morning_lens_upgrades.md` (backed up before the same-date
-rerun would have clobbered them).
-
-Next actions:
-1. **Adversarial-verify calibration is now the top item** — it has a
-   confirmed true-kill with a reproducible failure mode (verifier treats
-   the paper's self-claims as ground truth when refuting). The demoted
-   appendices of all three 07-11/07-12 runs are the calibration corpus.
-2. **Skim the extras** (need Dan) — morning backup
-   `harness_2026-07-11_morning_lens_upgrades.md` (37 extras) and/or the
-   fresh `harness_2026-07-12.md`; also input for verifier calibration.
+draft) — `data/defects_task_exposure_v9.yaml`, `data/harness_out_v9/`
+(now also `reverify_2026-07-14.md` + checkpoint jsonl). The 07-11 morning
+outputs are preserved as `*_2026-07-11_morning_lens_upgrades.md`.
 
 Still open: OpenAI default pinned to gpt-5.5 pending GPT-5.6 stability
 (cost-neutral: gpt-5.6-sol is the same $5/$30); synthesis dedup imperfection
 (two defects surfaced as match + near-duplicate extra); stretch unification
-of verify under SHARED_HEADER (plan step 14) still deferred — now a pure
-optimization (~one extra cache entry per provider); `harness/out/` + `data`
-symlink untracked (cosmetic).
+of verify under SHARED_HEADER still deferred (pure optimization); renderer
+drops severity for demoted-appendix entries (forced the all-HIGH reverify
+replay — cheap fix, aids future calibration); scope question: is
+`unverifiable` right for cited-literature accuracy critiques, or should it
+stay narrowly about the paper's own artifacts? (source-check branch will
+inform this); `harness/out/` + `data` symlink untracked (cosmetic).
 
 ## Active Research Lines
 
@@ -67,6 +46,20 @@ symlink untracked (cosmetic).
 | `source-check` | active | Stage 3.5 "strict mode": resolve `unverifiable` findings by checking the paper's characterization of cited sources against author-supplied extracted texts (local-first, content-indexed, double-gated). Design: `docs/convos/main/20260713_unverifiable_verdict_design.md`. |
 
 ## Recent Sessions
+
+- **2026-07-13/14** — Unverifiable verdict + source-check design (top
+  next-action). Dissected the circular refutation (verifier cited paper
+  self-claims as ground truth); Dan killed the severity-downgrade idea →
+  fourth verdict `unverifiable` stays in-report at full severity. Landed
+  via TDD (`77ffc4e`, 55/55; synthesis now passes `verified` through).
+  Calibration replay (`harness/reverify.py`, `129aa73`): 18/18 of run 1's
+  refuted findings, same refuters → 13 refuted / 3 unverifiable /
+  1 softened / 1 upheld; both pure self-claim kills recovered (third
+  suspect was a legitimate in-text refutation on re-read); run 1 would
+  have been 9/10. Then brainstormed stage 3.5 "strict mode" (source-check
+  against author-supplied texts) → branch `source-check` opened, plan
+  ready, implementation not started.
+  Convo: `docs/convos/main/20260713_unverifiable_verdict_design.md`.
 
 - **2026-07-12** — Paid v9 caching measurement (next-action 2). Two runs:
   run 1 hit a swallowed-INFO logging bug (no entry point configured logging;
