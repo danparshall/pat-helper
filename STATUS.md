@@ -68,6 +68,13 @@ symlink untracked (cosmetic).
 
 ## Recent Sessions
 
+- 2026-07-16: [source-check] implemented stage 3.5 (Parts A+B, TDD, 85/85
+  green) and passed the step-14 fixture gate (recall 3/3, citation-mismatch
+  defect resolved 2 upheld/0 refuted/0 unresolved) after the gate caught two
+  live plumbing bugs (quote-first extraction; name-token identity matching).
+  Svanberg/Davidson PDFs now in papers/ (main worktree) — step 15 next.
+  Convo: `docs/active/source-check/convos/20260716_source_check_implementation.md`.
+
 - **2026-07-12** — Paid v9 caching measurement (next-action 2). Two runs:
   run 1 hit a swallowed-INFO logging bug (no entry point configured logging;
   fixed via TDD, `b314bcf`, 50/50 green) and recall 8/10 — decomposed into
