@@ -185,6 +185,26 @@ def test_extract_citation_repeated_same_citation_is_one_citation():
     assert extract_citation(text) == ("svanberg", "2024")
 
 
+def test_extract_citation_latex_tie_et_al_form():
+    """Critique quotes are verbatim LaTeX; `et al.~(2024)` uses a tie, not a
+    space. Observed live on both step-15 specimens (reverify rows 6-7,
+    2026-07-16) — without tie handling, both abort at extraction."""
+    text = "Svanberg et al.~(2024) demonstrate that even ``free'' AI systems achieve only 49\\%."
+    assert extract_citation(text) == ("svanberg", "2024")
+
+
+def test_extract_citation_latex_tie_single_author_form():
+    text = "As Acemoglu~(2024) argues, displacement dominates."
+    assert extract_citation(text) == ("acemoglu", "2024")
+
+
+def test_extract_citation_latex_escaped_ampersand_two_author_form():
+    """LaTeX source escapes the ampersand: `Kording \\& Marinescu~(2025)`.
+    Same markup class as the tie — quotes lifted from .tex carry both."""
+    text = "This contradicts Kording \\& Marinescu~(2025) on sector growth."
+    assert extract_citation(text) == ("kording", "2025")
+
+
 # --- matching (deterministic; the model never picks the file) -------------
 
 

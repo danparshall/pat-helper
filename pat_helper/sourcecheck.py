@@ -92,7 +92,13 @@ def extract_citation(text: str) -> tuple[str, str] | None:
     Returns None when no citation is present (e.g. a critique about the
     paper's own replication package) or when more than one DISTINCT work is
     cited — resolving against the wrong source is worse than not resolving.
+
+    Critique quotes are verbatim LaTeX, so citation markup arrives as
+    `et al.~(2024)` (tie) and `Kording \\& Marinescu` (escaped ampersand);
+    fold both to their plain-text forms before matching (observed live on
+    the step-15 specimens, 2026-07-16).
     """
+    text = text.replace("~", " ").replace("\\&", "&")
     found = {
         (_fold(m.group(1)), m.group(2))
         for m in _CITATION_RE.finditer(text)
