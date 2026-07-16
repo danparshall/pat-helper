@@ -74,6 +74,9 @@ class ReviewRun:
     findings: list[Finding] = field(default_factory=list)  # main body (post-synthesis)
     demoted: list[Finding] = field(default_factory=list)  # ungrounded or refuted
     gaps: list[str] = field(default_factory=list)  # "lens × model: reason"
+    # Resolution counts from stage 3.5 (source check); None when the stage
+    # did not run — the report renders the section only when set.
+    source_check_summary: str | None = None
 
 
 # --- JSON schemas handed to providers (identity matters: the pipeline and the
@@ -116,6 +119,66 @@ VERDICT_SCHEMA: dict = {
         "reasoning": {"type": "string"},
     },
     "required": ["verdict", "reasoning"],
+    "additionalProperties": False,
+}
+
+# Stage 3.5 (source check) — cheap-model read of a source file's head, used to
+# build the content-keyed index. Filenames are never trusted; identity comes
+# from the text itself.
+SOURCE_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "authors": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Author surnames, in the order listed by the source",
+        },
+        "year": {"type": "string", "description": "Publication year as printed, e.g. '2024'"},
+        "title": {"type": "string"},
+    },
+    "required": ["authors", "year", "title"],
+    "additionalProperties": False,
+}
+
+# Stage 3.5 — one check call per (unverifiable finding, matched source). The
+# checker's opinion is honored only after two mechanical gates: source_quote
+# must ground against the source text, and the reported identity must match
+# the citation.
+SOURCE_CHECK_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "identity": {
+            "type": "object",
+            "properties": {
+                "authors": {"type": "array", "items": {"type": "string"}},
+                "year": {"type": "string"},
+                "title": {"type": "string"},
+            },
+            "required": ["authors", "year", "title"],
+            "additionalProperties": False,
+            "description": "Who/what the supplied source ACTUALLY is, read from its text",
+        },
+        "identity_matches_citation": {
+            "type": "boolean",
+            "description": "Does the source's own identity match the citation in the critique?",
+        },
+        "resolution": {
+            "type": "string",
+            "enum": ["critique-confirmed", "critique-contradicted", "unresolved"],
+        },
+        "source_quote": {
+            "type": "string",
+            "description": "Verbatim quote from the SOURCE text that decides the resolution",
+        },
+        "reasoning": {"type": "string"},
+    },
+    "required": [
+        "identity",
+        "identity_matches_citation",
+        "resolution",
+        "source_quote",
+        "reasoning",
+    ],
     "additionalProperties": False,
 }
 

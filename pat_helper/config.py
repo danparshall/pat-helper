@@ -11,6 +11,7 @@ Model IDs verified 2026-07-09 (web research + claude-api skill):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-4-8",
@@ -44,3 +45,7 @@ class ReviewConfig:
     # larger cap. Requires streaming on Anthropic (SDK refuses non-streaming
     # requests above ~16k). ~2.5x headroom over the largest observed run.
     synthesis_max_output_tokens: int = 64000
+    # Stage 3.5 ("strict mode"): directory of author-supplied extracted-text
+    # source files. None (the default) skips the stage entirely — byte-
+    # identical behavior to a run without the feature.
+    sources_dir: Path | None = None

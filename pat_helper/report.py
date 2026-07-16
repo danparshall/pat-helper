@@ -66,6 +66,9 @@ def render(run: ReviewRun, run_date: date | None = None) -> str:
             for f in group:
                 out.append(_render_finding(f))
 
+    if run.source_check_summary:
+        out += ["## Source check", "", run.source_check_summary, ""]
+
     if run.gaps:
         out += ["## Coverage gaps", ""]
         out += [f"- {g}" for g in run.gaps]

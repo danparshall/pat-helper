@@ -55,3 +55,7 @@ def verify_prompt() -> str:
 
 def synthesis_prompt() -> str:
     return (LENSES_DIR / "_synthesis.md").read_text()
+
+
+def source_check_prompt() -> str:
+    return (LENSES_DIR / "_source_check.md").read_text()

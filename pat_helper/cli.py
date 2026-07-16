@@ -102,11 +102,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated subset of lens keys",
     )
     rev.add_argument("--out", type=Path, default=Path("."), help="Output directory")
+    rev.add_argument(
+        "--sources",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="Directory of extracted-text files for works the paper cites "
+        "('strict mode'): unverifiable findings are checked against the "
+        "actual sources and auto-resolved. Omit for today's relaxed behavior.",
+    )
     args = parser.parse_args(argv)
 
     configure_logging()
     load_dotenv()
-    config = ReviewConfig()
+    config = ReviewConfig(sources_dir=args.sources)
     for override in args.model:
         provider, _, model_id = override.partition("=")
         if not model_id or provider not in config.models:

@@ -86,6 +86,23 @@ def _strip_document_envelope(
     return lines[start:stop]
 
 
+def load_text_source(path: str | Path) -> FlattenedPaper:
+    """Load a plain-text file (e.g. a pdftotext extraction) as a FlattenedPaper.
+
+    Source texts must NOT go through `load_paper`: its LaTeX comment-stripping
+    would truncate any line containing a bare '%' (ubiquitous in extracted
+    econ text). No flattening, no envelope stripping — the text as-is, with a
+    line map so quote grounding can report (file, line) locations.
+    """
+    p = Path(path).resolve()
+    lines = p.read_text(errors="replace").splitlines()
+    return FlattenedPaper(
+        name=p.stem,
+        text="\n".join(lines),
+        line_origins=[SourceLocation(file=p.name, line=i) for i in range(1, len(lines) + 1)],
+    )
+
+
 def load_paper(main_tex: str | Path) -> FlattenedPaper:
     main = Path(main_tex).resolve()
     lines = _strip_document_envelope(_flatten_file(main, main.parent))
