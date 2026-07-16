@@ -12,7 +12,14 @@ import pytest
 
 from pat_helper.config import ReviewConfig
 from pat_helper.latex import load_paper
-from pat_helper.models import FINDINGS_SCHEMA, SYNTHESIS_SCHEMA, VERDICT_SCHEMA, LensSpec
+from pat_helper.models import (
+    FINDINGS_SCHEMA,
+    SOURCE_CHECK_SCHEMA,
+    SOURCE_INDEX_SCHEMA,
+    SYNTHESIS_SCHEMA,
+    VERDICT_SCHEMA,
+    LensSpec,
+)
 from pat_helper.pipeline import run_review
 from pat_helper.prompts import SHARED_HEADER
 from pat_helper.providers.base import Provider, TruncatedOutputError
@@ -23,6 +30,26 @@ GROUNDED_QUOTE = "Standard errors are clustered at the region level."
 SECOND_GROUNDED_QUOTE = "We use a difference-in-differences design with staggered adoption."
 FABRICATED_QUOTE = "This sentence appears nowhere in the manuscript."
 
+# --- source-check fixtures (stage 3.5) ---
+SOURCE_QUOTE = "Access to generative AI increases task completion by 14 percent."
+SOURCE_TEXT = f"""\
+The Productivity Effects of Generative AI
+Svanberg, M. (2024). Working paper.
+
+{SOURCE_QUOTE}
+The estimated effect is concentrated among less-experienced workers.
+"""
+SVANBERG_IDENTITY = {
+    "authors": ["Svanberg"],
+    "year": "2024",
+    "title": "The Productivity Effects of Generative AI",
+}
+# Evidence text carrying exactly one extractable citation
+CITED_EVIDENCE = (
+    "The paper attributes a 25 percent gain to Svanberg et al. (2024), "
+    "which cannot be verified from the paper's own text."
+)
+
 
 def _user_text(user) -> str:
     """Normalize the provider `user` argument (str or (prefix, suffix) tuple)
@@ -30,10 +57,12 @@ def _user_text(user) -> str:
     return "".join(user) if isinstance(user, tuple) else user
 
 
-def make_finding(quote=GROUNDED_QUOTE, severity="HIGH"):
+def make_finding(
+    quote=GROUNDED_QUOTE, severity="HIGH", evidence="Test evidence for this critique."
+):
     return {
         "quote": quote,
-        "evidence": "Test evidence for this critique.",
+        "evidence": evidence,
         "severity": severity,
         "suggested_fix": "Do the thing.",
     }
@@ -50,6 +79,11 @@ class FakeProvider(Provider):
         truncate_synthesis=False,
         synthesis_echo=None,
         events=None,
+        source_index=None,
+        source_check_resolution="unresolved",
+        source_check_quote=SOURCE_QUOTE,
+        source_check_identity=None,
+        source_check_identity_matches=True,
     ):
         self.name = name
         self.findings = findings if findings is not None else [make_finding()]
@@ -59,6 +93,11 @@ class FakeProvider(Provider):
         self.truncate_synthesis = truncate_synthesis
         self.synthesis_echo = synthesis_echo  # explicit synthesis output override
         self.events = events  # shared list of ("start"|"end", provider, kind)
+        self.source_index = source_index  # dict of text-marker -> identity dict
+        self.source_check_resolution = source_check_resolution
+        self.source_check_quote = source_check_quote
+        self.source_check_identity = source_check_identity
+        self.source_check_identity_matches = source_check_identity_matches
         self.calls = []  # list of (kind, system, user)
         self.call_caps = []  # list of (kind, max_output_tokens)
 
@@ -71,6 +110,10 @@ class FakeProvider(Provider):
             kind = "verdict"
         elif schema is SYNTHESIS_SCHEMA:
             kind = "synthesis"
+        elif schema is SOURCE_INDEX_SCHEMA:
+            kind = "source_index"
+        elif schema is SOURCE_CHECK_SCHEMA:
+            kind = "source_check"
         else:
             kind = "unknown"
         self.calls.append((kind, system, user))
@@ -98,6 +141,22 @@ class FakeProvider(Provider):
                 "findings": [
                     {**make_finding(), "lens": "l0", "models": ["fake-a", "fake-b"]},
                 ]
+            }
+        if kind == "source_index":
+            text = _user_text(user)
+            for marker, identity in (self.source_index or {}).items():
+                if marker in text:
+                    return dict(identity)
+            raise AssertionError(
+                f"{self.name} got a source-index call it cannot answer: {text[:120]!r}"
+            )
+        if kind == "source_check":
+            return {
+                "identity": dict(self.source_check_identity or SVANBERG_IDENTITY),
+                "identity_matches_citation": self.source_check_identity_matches,
+                "resolution": self.source_check_resolution,
+                "source_quote": self.source_check_quote,
+                "reasoning": "because",
             }
         raise AssertionError(f"unexpected schema kind {kind}")
 
@@ -376,3 +435,218 @@ async def test_first_verify_call_per_refuter_completes_before_fan_out(paper):
     verdicts = [e for e in events if e[2] == "verdict" and e[0] == "start"]
     assert len(verdicts) == 4, "expected 2 HIGH findings per provider to be verified"
     assert _barrier_respected(events, "verdict", 2)  # one priming call per refuter
+
+
+# --- Stage 3.5: source check (docs/active/source-check/plans/20260714_source_check_stage.md)
+# With --sources, `unverifiable` findings are resolved against author-supplied
+# source texts. Without it, behavior is byte-identical to today (pinned below).
+
+
+@pytest.fixture()
+def sources_dir(tmp_path):
+    d = tmp_path / "sources"
+    d.mkdir()
+    (d / "svanberg_2024.txt").write_text(SOURCE_TEXT)
+    return d
+
+
+SOURCE_MARKERS = {"Svanberg": SVANBERG_IDENTITY}
+
+
+def _kinds(p):
+    return [k for k, _s, _u in p.calls]
+
+
+def _source_pair(resolution="unresolved", **checker_kw):
+    """(finder, checker) pair: the finder raises one unverifiable-verdicted
+    finding citing Svanberg et al. (2024); the checker resolves it. With two
+    providers the checker (rotation offset 1 fallback) is also the refuter."""
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution=resolution,
+        **checker_kw,
+    )
+    return finder, checker
+
+
+async def test_source_check_goes_to_third_provider_and_index_to_first_healthy(
+    paper, sources_dir
+):
+    """Checker rotation: with three providers the checker is finder+2 — never
+    the finder, never the refuter. The index is built by the first healthy
+    provider, once."""
+    finder = FakeProvider(
+        "fake-a",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+    )
+    refuter = FakeProvider("fake-b", findings=[], verdict="unverifiable")
+    checker = FakeProvider("fake-c", findings=[])
+    await run_review(
+        paper, [finder, refuter, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert "source_check" in _kinds(checker)
+    assert "source_check" not in _kinds(finder)
+    assert "source_check" not in _kinds(refuter)
+    # index reads go to the first healthy provider only
+    assert "source_index" in _kinds(finder)
+    assert "source_index" not in _kinds(refuter)
+    assert "source_index" not in _kinds(checker)
+
+
+async def test_confirmed_resolution_enters_synthesis_as_upheld(paper, sources_dir):
+    finder, checker = _source_pair("critique-confirmed")
+    await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    assert '"verified": "upheld"' in _user_text(synth[0])
+    assert '"verified": "unverifiable"' not in _user_text(synth[0])
+
+
+async def test_confirmed_resolution_carries_source_check_provenance_note(paper, sources_dir):
+    """The resolved finding must say which checker read which file — the
+    provenance note travels on the finding (observed via unmerged
+    pass-through, the established synthesis-failure behavior)."""
+    finder, checker = _source_pair("critique-confirmed")
+    finder.truncate_synthesis = True  # force pass-through so notes are observable
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "upheld"
+    assert "[source-check:checker" in f.verify_notes
+    assert "svanberg_2024.txt" in f.verify_notes
+
+
+async def test_contradicted_resolution_demotes_with_exonerating_source_quote(
+    paper, sources_dir
+):
+    """The source exonerates the paper: the critique is demoted (symmetric
+    with refuted) and the demotion carries the exonerating source quote."""
+    finder, checker = _source_pair("critique-contradicted")
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.findings == []
+    demoted = [f for f in run.demoted if f.evidence == CITED_EVIDENCE]
+    assert len(demoted) == 1
+    assert demoted[0].verified == "refuted"
+    assert SOURCE_QUOTE in demoted[0].verify_notes
+    # nothing survived, so synthesis never ran
+    assert not any(k == "synthesis" for p in (finder, checker) for k in _kinds(p))
+
+
+async def test_unresolved_resolution_stays_unverifiable(paper, sources_dir):
+    finder, checker = _source_pair("unresolved")
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    assert '"verified": "unverifiable"' in _user_text(synth[0])
+
+
+async def test_identity_mismatch_gate_blocks_demotion(paper, sources_dir):
+    """A checker that read the wrong source (identity ≠ citation) cannot
+    demote, even when it says critique-contradicted — an index error may cost
+    a check, never cause a silent wrong-source demotion."""
+    finder, checker = _source_pair(
+        "critique-contradicted", source_check_identity_matches=False
+    )
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth and '"verified": "unverifiable"' in _user_text(synth[0])
+
+
+async def test_ungrounded_source_quote_gate_blocks_demotion(paper, sources_dir):
+    """A demotion-enabling source quote must mechanically ground against the
+    source text; a fabricated quote forces unresolved."""
+    finder, checker = _source_pair(
+        "critique-contradicted",
+        source_check_quote="This sentence appears nowhere in the source document.",
+    )
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth and '"verified": "unverifiable"' in _user_text(synth[0])
+
+
+async def test_unmatched_citation_stays_unverifiable_with_note(paper, sources_dir):
+    """A citation with no matching source file costs no check call; the
+    finding keeps its verdict and gains an explanatory note."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(evidence="Doe et al. (1999) is mischaracterized in the review section.")
+        ],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,  # pass-through so the note is observable
+    )
+    checker = FakeProvider("checker", findings=[], verdict="unverifiable")
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert not any(k == "source_check" for p in (finder, checker) for k in _kinds(p))
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "no matching source" in f.verify_notes
+
+
+async def test_ambiguous_citation_stays_unverifiable_with_note(paper, tmp_path):
+    """Two sources with the same (author, year): the model never picks the
+    file, so the finding costs no check call, keeps its verdict, and gains an
+    explanatory note (plan step 9: unmatched/ambiguous stay put)."""
+    d = tmp_path / "sources"
+    d.mkdir()
+    (d / "one.txt").write_text(SOURCE_TEXT)
+    (d / "two.txt").write_text(SOURCE_TEXT + "\nAppendix tables.\n")
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,  # pass-through so the note is observable
+    )
+    checker = FakeProvider("checker", findings=[], verdict="unverifiable")
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=d))
+    assert not any(k == "source_check" for p in (finder, checker) for k in _kinds(p))
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "ambiguous" in f.verify_notes
+
+
+async def test_no_sources_dir_makes_no_source_calls_and_pins_current_behavior(paper):
+    """Regression pin for every existing user: without sources_dir, the run is
+    byte-identical to today — no index reads, no check calls, unverifiable
+    findings flow to synthesis untouched, and nothing new appears in the
+    rendered report."""
+    from pat_helper.report import render
+
+    finder = FakeProvider("finder", findings=[make_finding(evidence=CITED_EVIDENCE)])
+    refuter = FakeProvider("refuter", findings=[], verdict="unverifiable")
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    all_kinds = [k for p in (finder, refuter) for k in _kinds(p)]
+    assert "source_index" not in all_kinds
+    assert "source_check" not in all_kinds
+    assert run.demoted == []
+    assert run.gaps == []
+    synth = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    assert '"verified": "unverifiable"' in _user_text(synth[0])
+    # the user-visible surface is unchanged: no source-check section renders
+    assert "Source check" not in render(run)

@@ -96,6 +96,21 @@ def test_unverifiable_finding_renders_with_check_artifact_tag():
     assert "check external artifact" not in out[appendix_start:]
 
 
+def test_source_check_summary_renders_when_stage_ran():
+    """When stage 3.5 ran, the report gets a Source check section with the
+    resolution counts."""
+    run = _run([_finding()])
+    run.source_check_summary = "3 unverifiable findings checked: 1 upheld, 1 refuted, 1 unresolved"
+    out = render(run)
+    assert "## Source check" in out
+    assert "1 upheld, 1 refuted, 1 unresolved" in out
+
+
+def test_no_source_check_section_when_stage_did_not_run():
+    out = render(_run([_finding()]))
+    assert "Source check" not in out
+
+
 def test_coverage_gaps_are_reported():
     out = render(_run([_finding()], gaps=["causal-id × gpt: failed after retries"]))
     assert "causal-id × gpt" in out

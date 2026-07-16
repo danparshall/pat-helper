@@ -104,6 +104,34 @@ def test_judge_provider_unavailable_fails_fast(monkeypatch):
         build_judge()
 
 
+# --- source check (--sources) --------------------------------------------
+
+
+def test_sources_flag_populates_config(monkeypatch, tmp_path):
+    """--sources <dir> must reach the pipeline as config.sources_dir; omitting
+    the flag must leave it None (relaxed mode, today's behavior)."""
+    from pat_helper.models import ReviewRun
+
+    _patch_sdks(monkeypatch)
+    captured = []
+
+    async def capture_run_review(paper, providers, lenses, config):
+        captured.append(config)
+        return ReviewRun(paper_name=paper.name)
+
+    monkeypatch.setattr(cli, "run_review", capture_run_review)
+    src = tmp_path / "sources"
+    src.mkdir()
+
+    rc = cli.main(["review", str(FIXTURE), "--sources", str(src), "--out", str(tmp_path)])
+    assert rc == 0
+    assert captured[0].sources_dir == src
+
+    rc = cli.main(["review", str(FIXTURE), "--out", str(tmp_path)])
+    assert rc == 0
+    assert captured[1].sources_dir is None
+
+
 # --- logging visibility -------------------------------------------------
 # Regression: the 2026-07-11 paid v9 harness run silently dropped the per-run
 # cache-usage summary (pipeline logs it at INFO on the "pat_helper" logger)
