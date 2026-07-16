@@ -44,6 +44,7 @@ from pat_helper.sourcecheck import (
     build_index,
     extract_citation,
     file_sha256,
+    has_year_near_miss,
     match,
 )
 
@@ -258,8 +259,15 @@ async def _run_source_check(
         label = f"{citation[0]} ({citation[1]})"
         target = match(citation, index)
         if target is None:
+            hint = (
+                " (a supplied source matches the surname one year off —"
+                " possible version mismatch?)"
+                if has_year_near_miss(citation, index)
+                else ""
+            )
             _append_note(
-                f, f"[source-check] no matching source supplied for {label}; left unresolved"
+                f,
+                f"[source-check] no matching source supplied for {label}{hint}; left unresolved",
             )
             continue
         if target is AMBIGUOUS:

@@ -146,3 +146,20 @@ def match(citation: tuple[str, str], index: dict[Path, dict]) -> Path | None | _
     if len(hits) > 1:
         return AMBIGUOUS
     return hits[0]
+
+
+def has_year_near_miss(citation: tuple[str, str], index: dict[Path, dict]) -> bool:
+    """True if a source matches the surname but is ±1 year off the citation —
+    likely a working-paper-vs-published version mismatch. The caller should
+    say so rather than guess: checking the wrong version silently is worse
+    than leaving the finding unresolved."""
+    surname, year = citation
+    surname = _fold(surname)
+    if not year.isdigit():
+        return False
+    return any(
+        identity.get("year", "").isdigit()
+        and abs(int(identity["year"]) - int(year)) == 1
+        and any(_fold(a) == surname for a in identity.get("authors", []))
+        for identity in index.values()
+    )

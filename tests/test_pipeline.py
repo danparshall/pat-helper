@@ -630,6 +630,29 @@ async def test_ambiguous_citation_stays_unverifiable_with_note(paper, tmp_path):
     assert "ambiguous" in f.verify_notes
 
 
+async def test_year_near_miss_stays_unverifiable_with_version_mismatch_note(paper, sources_dir):
+    """Citation year one off from the indexed source (working paper vs
+    published version): never silently check the possibly-wrong version —
+    stay put, but tell the author a version mismatch may explain it."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(
+                evidence="The paper misstates Svanberg et al. (2025) on the productivity gain."
+            )
+        ],
+        source_index=SOURCE_MARKERS,  # indexed source is Svanberg 2024
+        truncate_synthesis=True,  # pass-through so the note is observable
+    )
+    checker = FakeProvider("checker", findings=[], verdict="unverifiable")
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    assert not any(k == "source_check" for p in (finder, checker) for k in _kinds(p))
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "version mismatch" in f.verify_notes
+
+
 async def test_no_sources_dir_makes_no_source_calls_and_pins_current_behavior(paper):
     """Regression pin for every existing user: without sources_dir, the run is
     byte-identical to today — no index reads, no check calls, unverifiable
