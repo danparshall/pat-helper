@@ -250,7 +250,11 @@ async def _run_source_check(
     offset = 2 if len(providers) >= 3 else 1
     checkable: list[tuple[Finding, Provider, Path, tuple[str, str]]] = []
     for f in queue:
-        citation = extract_citation(f"{f.quote}\n{f.evidence}")
+        # Quote first: the disputed citation lives in the paper's own sentence.
+        # Evidence is reviewer commentary and routinely name-drops comparison
+        # works, which would otherwise trip the >1-distinct-citations abort
+        # (observed live on the 2026-07-16 fixture-gate run).
+        citation = extract_citation(f.quote) or extract_citation(f"{f.quote}\n{f.evidence}")
         if citation is None:
             _append_note(
                 f, "[source-check] no single citation found in the critique; left unresolved"

@@ -15,11 +15,11 @@ import hashlib
 import json
 
 import pytest
-from pat_helper.sourcecheck import AMBIGUOUS, build_index, extract_citation, match
 
 from pat_helper.config import ReviewConfig
 from pat_helper.models import SOURCE_INDEX_SCHEMA
 from pat_helper.providers.base import Provider, user_text
+from pat_helper.sourcecheck import AMBIGUOUS, build_index, extract_citation, match
 
 SVANBERG_TEXT = """\
 The Productivity Effects of Generative AI
@@ -198,6 +198,30 @@ async def test_match_year_must_match_exactly(sources_dir):
     version — a near-miss year is not a hit."""
     index = await build_index(sources_dir, FakeIndexProvider(), ReviewConfig())
     assert match(("svanberg", "2025"), index) is None
+
+
+def test_match_tolerates_comma_initial_author_strings(tmp_path):
+    """Models render authors as printed ('Svanberg, M.'), not as bare
+    surnames — the mechanical identity gate must match on the surname token,
+    or it false-rejects honest confirmations (observed live on the 2026-07-16
+    fixture-gate run: checker said critique-confirmed, gate forced
+    unresolved over 'Svanberg, M.' != 'svanberg')."""
+    path = tmp_path / "s.txt"
+    index = {
+        path: {
+            "authors": ["Svanberg, M."],
+            "year": "2024",
+            "title": "The Productivity Effects of Generative AI",
+        }
+    }
+    assert match(("svanberg", "2024"), index) == path
+
+
+def test_match_does_not_fire_on_substring_of_a_longer_name(tmp_path):
+    """Token match, not substring match: 'berg' must not hit 'Svanberg'."""
+    path = tmp_path / "s.txt"
+    index = {path: {"authors": ["Svanberg, M."], "year": "2024", "title": "t"}}
+    assert match(("berg", "2024"), index) is None
 
 
 async def test_match_two_same_author_year_files_is_ambiguous(tmp_path):

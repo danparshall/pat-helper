@@ -69,6 +69,23 @@ def _fold(s: str) -> str:
     return unicodedata.normalize("NFC", s).casefold()
 
 
+# Name tokens: runs of letters, keeping internal hyphens/apostrophes
+# ("garcía-márquez" is one token; "svanberg, m." tokenizes to svanberg + m).
+_NAME_TOKEN_RE = re.compile(r"[^\W\d_][\w'’\-]*")
+
+
+def _surname_matches(surname_folded: str, author: str) -> bool:
+    """True if the citation surname is a whole name-token of the author string.
+
+    Models render authors as printed — 'Svanberg, M.', 'Kording, K.' — not as
+    bare surnames, so equality against the full string false-rejects honest
+    identities (observed live, 2026-07-16 fixture gate). Token match keeps the
+    gate mechanical without being brittle about name formatting; substrings
+    ('berg' vs 'Svanberg') still do not match.
+    """
+    return surname_folded in _NAME_TOKEN_RE.findall(_fold(author))
+
+
 def extract_citation(text: str) -> tuple[str, str] | None:
     """Extract the single (surname, year) citation from critique text.
 
@@ -139,7 +156,7 @@ def match(citation: tuple[str, str], index: dict[Path, dict]) -> Path | None | _
         path
         for path, identity in index.items()
         if identity.get("year") == year
-        and any(_fold(a) == surname for a in identity.get("authors", []))
+        and any(_surname_matches(surname, a) for a in identity.get("authors", []))
     ]
     if not hits:
         return None
@@ -160,6 +177,6 @@ def has_year_near_miss(citation: tuple[str, str], index: dict[Path, dict]) -> bo
     return any(
         identity.get("year", "").isdigit()
         and abs(int(identity["year"]) - int(year)) == 1
-        and any(_fold(a) == surname for a in identity.get("authors", []))
+        and any(_surname_matches(surname, a) for a in identity.get("authors", []))
         for identity in index.values()
     )

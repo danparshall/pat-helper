@@ -630,6 +630,43 @@ async def test_ambiguous_citation_stays_unverifiable_with_note(paper, tmp_path):
     assert "ambiguous" in f.verify_notes
 
 
+async def test_citation_taken_from_quote_when_evidence_cites_comparison_works(paper, sources_dir):
+    """Real critique prose name-drops comparison literature ('this figure is
+    more reminiscent of X et al. (2023)...'). The disputed citation lives in
+    the QUOTE — the paper's verbatim sentence — so evidence-side mentions of
+    other works must not abort extraction. Caught live by the 2026-07-16
+    fixture-gate run (defect resolved 'unresolved' instead of upheld)."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(
+                quote=(
+                    "Svanberg (2024) documents that access to generative AI"
+                    " increases task completion by 14 percent."
+                ),
+                evidence=(
+                    "The attributed figure looks suspect — it is more reminiscent of"
+                    " Brynjolfsson, Li & Raymond (2023) — and cannot be verified from"
+                    " the paper's text."
+                ),
+            )
+        ],
+        source_index=SOURCE_MARKERS,
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-confirmed",
+    )
+    await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    assert any(k == "source_check" for k in _kinds(checker)), (
+        "the check call never fired: evidence-side comparison citation aborted extraction"
+    )
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth and '"verified": "upheld"' in _user_text(synth[0])
+
+
 async def test_year_near_miss_stays_unverifiable_with_version_mismatch_note(paper, sources_dir):
     """Citation year one off from the indexed source (working paper vs
     published version): never silently check the possibly-wrong version —

@@ -47,3 +47,20 @@
     provide no cross-sectional variation to identify against — the DiD design
     claimed in Methods cannot work. A reviewer should flag that the stated
     identification no longer identifies.
+
+# Source-check (stage 3.5) gate: exercised only when the harness runs with
+# --sources tests/fixtures/sources. The fixture paper truthfully cites
+# Svanberg (2024) at 14 percent; the mutation inflates the paper's
+# characterization of the source. From the paper alone this is unverifiable
+# (the source isn't in the text); with the source supplied, the checker
+# should confirm the critique and the finding should survive as upheld.
+- id: citation-mismatch
+  file: intro.tex
+  original: "increases task completion by 14 percent"
+  mutated: "increases task completion by 40 percent"
+  lens_expected: prior-work
+  description: >
+    The paper claims Svanberg (2024) found a 40 percent task-completion
+    gain; the cited source reports 14 percent. The paper's characterization
+    of the cited literature overstates the source by nearly a factor of
+    three. A reviewer should flag the misstated citation.

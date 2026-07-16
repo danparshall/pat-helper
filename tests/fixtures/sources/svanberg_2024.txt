@@ -1,0 +1,10 @@
+The Productivity Effects of Generative AI on Task Completion
+
+Svanberg, M. (2024). Working paper.
+
+Abstract: We measure the productivity effects of generative AI assistance in
+a randomized rollout across knowledge-work teams. Access to generative AI
+increases task completion by 14 percent on average. The estimated effect is
+concentrated among less-experienced workers and attenuates as task
+complexity rises. We find no evidence of quality degradation in completed
+tasks.

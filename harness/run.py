@@ -89,7 +89,7 @@ async def judge_defect(judge, defect: dict, findings: list[dict]) -> dict:
 
 async def amain(args) -> int:
     load_dotenv()
-    config = ReviewConfig()
+    config = ReviewConfig(sources_dir=Path(args.sources) if args.sources else None)
 
     main_tex = Path(args.paper).resolve()
     src_dir = main_tex.parent
@@ -158,7 +158,14 @@ def main() -> int:
     parser.add_argument("paper", help="Path to main .tex of the SOURCE paper")
     parser.add_argument("--defects", default=str(REPO / "harness" / "defects.yaml"))
     parser.add_argument("--out", default=str(REPO / "harness" / "out"))
-    parser.add_argument("--providers", default="anthropic,openai,google")
+    parser.add_argument(
+        "--providers", default="anthropic,openai,google"
+    )
+    parser.add_argument(
+        "--sources",
+        default=None,
+        help="Directory of extracted-text cited sources (enables stage 3.5)",
+    )
     return asyncio.run(amain(parser.parse_args()))
 
 

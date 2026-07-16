@@ -150,7 +150,11 @@ SOURCE_CHECK_SCHEMA: dict = {
         "identity": {
             "type": "object",
             "properties": {
-                "authors": {"type": "array", "items": {"type": "string"}},
+                "authors": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Author surnames as printed (initials tolerated)",
+                },
                 "year": {"type": "string"},
                 "title": {"type": "string"},
             },
