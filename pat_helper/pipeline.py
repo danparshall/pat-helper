@@ -208,7 +208,8 @@ async def _source_check_one(
     if not identity_ok:
         reasons.append("source identity does not match the citation")
     if resolution == "critique-contradicted" and not quote_ok:
-        reasons.append("source quote did not ground in the source text")
+        # Keep the rejected quote: a Gate B rejection is undiagnosable without it.
+        reasons.append(f'source quote did not ground in the source text: "{quote}"')
     if resolution == "critique-contradicted" and truncated:
         reasons.append("source was truncated for the check; demotion not honored")
     detail = f" [{'; '.join(reasons)}]" if reasons else ""

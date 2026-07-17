@@ -572,17 +572,30 @@ async def test_identity_mismatch_gate_blocks_demotion(paper, sources_dir):
 
 async def test_ungrounded_source_quote_gate_blocks_demotion(paper, sources_dir):
     """A demotion-enabling source quote must mechanically ground against the
-    source text; a fabricated quote forces unresolved."""
-    finder, checker = _source_pair(
-        "critique-contradicted",
+    source text; a fabricated quote forces unresolved. The rejected quote is
+    preserved in the note — without it a Gate B rejection cannot be diagnosed
+    after the fact (observed live: step-15 Svanberg specimen, 2026-07-17)."""
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,  # pass-through so the note is observable
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-contradicted",
         source_check_quote="This sentence appears nowhere in the source document.",
     )
     run = await run_review(
         paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
     )
     assert run.demoted == []
-    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
-    assert synth and '"verified": "unverifiable"' in _user_text(synth[0])
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "This sentence appears nowhere in the source document." in f.verify_notes
 
 
 async def test_unmatched_citation_stays_unverifiable_with_note(paper, sources_dir):
