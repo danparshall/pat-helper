@@ -598,6 +598,86 @@ async def test_ungrounded_source_quote_gate_blocks_demotion(paper, sources_dir):
     assert "This sentence appears nowhere in the source document." in f.verify_notes
 
 
+async def test_narrowed_resolution_softens_in_place(paper, sources_dir):
+    """critique-narrowed: the source kills the critique's central charge but an
+    actionable point survives — the finding stays IN the report at `softened`,
+    not demoted, not full-severity. Ground truth: the step-15 Svanberg
+    specimen (Dan, 2026-07-17): 'not TOTALLY wrong... I'd prefer the
+    reminder'."""
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,  # pass-through so verdict + note are observable
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-narrowed",
+    )
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "softened"
+    assert "critique-narrowed" in f.verify_notes
+    assert SOURCE_QUOTE in f.verify_notes
+    assert "1 narrowed" in run.source_check_summary
+
+
+async def test_narrowed_with_ungrounded_quote_falls_to_unresolved(paper, sources_dir):
+    """A narrowing that cannot ground its source quote is not honored — the
+    finding keeps the full unverifiable flag (the safe failure mode)."""
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-narrowed",
+        source_check_quote="This sentence appears nowhere in the source document.",
+    )
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "did not ground" in f.verify_notes
+
+
+async def test_narrowed_with_identity_mismatch_falls_to_unresolved(paper, sources_dir):
+    """Narrowing from the wrong source is an error, same as upholding from
+    the wrong source: identity gate applies."""
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(evidence=CITED_EVIDENCE)],
+        source_index=SOURCE_MARKERS,
+        truncate_synthesis=True,
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-narrowed",
+        source_check_identity_matches=False,
+    )
+    run = await run_review(
+        paper, [finder, checker], lenses(1), config(sources_dir=sources_dir)
+    )
+    assert run.demoted == []
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert "identity does not match" in f.verify_notes
+
+
 async def test_unmatched_citation_stays_unverifiable_with_note(paper, sources_dir):
     """A citation with no matching source file costs no check call; the
     finding keeps its verdict and gains an explanatory note."""

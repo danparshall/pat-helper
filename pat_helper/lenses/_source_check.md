@@ -23,14 +23,25 @@ Work in this order:
    quote cannot be located will not be honored.
 3. **Resolve.**
 
-Resolution:
+Resolution. A critique usually makes several distinct charges — check each
+one against the source separately before choosing:
+
 - "critique-confirmed": the source, read directly, shows the paper's
   characterization is wrong in the way the critique alleges (misstated
   number, inverted direction, construct mismatch, overclaimed scope). The
   critique was right.
-- "critique-contradicted": the source demonstrates the paper characterized
-  it correctly — the critique's suspicion dissolves on contact with the
-  actual text. Quote the passage that exonerates the paper.
+- "critique-narrowed": the source kills the critique's central charge, but
+  at least one actionable point survives contact with the text — for
+  example, the number and its causal story check out, yet the paper states
+  a scoped result (one domain, one population, one metric) in unscoped
+  language. The author still wants that reminder; do not bury it. Say
+  explicitly which charges died and which survive, and quote the passage
+  that settles the surviving point.
+- "critique-contradicted": EVERY substantive charge fails — the critique's
+  suspicion dissolves entirely on contact with the actual text, leaving
+  nothing an author would act on. Quote the passage that exonerates the
+  paper. If you find yourself writing "minor caveat" in your reasoning,
+  that caveat is usually a surviving point: use "critique-narrowed".
 - "unresolved": the source does not settle it — the relevant material is
   absent, ambiguous, or you are not confident this is the right document.
   When in doubt, resolve nothing: "unresolved" keeps the finding flagged for

@@ -196,6 +196,17 @@ async def _source_check_one(
             finding, f'{tag} critique-confirmed — source: "{quote}" ({payload["reasoning"]})'
         )
         return
+    # critique-narrowed reduces the finding's presentation, so it clears the
+    # same bars as a demotion: grounded quote, matching identity, untruncated
+    # read. An unhonored narrowing falls back to the full unverifiable flag —
+    # the safe direction.
+    if resolution == "critique-narrowed" and identity_ok and quote_ok and not truncated:
+        finding.verified = "softened"
+        _append_note(
+            finding,
+            f'{tag} critique-narrowed — source: "{quote}" ({payload["reasoning"]})',
+        )
+        return
     if resolution == "critique-contradicted" and identity_ok and quote_ok and not truncated:
         finding.verified = "refuted"
         _append_note(
@@ -207,10 +218,10 @@ async def _source_check_one(
     reasons = []
     if not identity_ok:
         reasons.append("source identity does not match the citation")
-    if resolution == "critique-contradicted" and not quote_ok:
+    if resolution in ("critique-contradicted", "critique-narrowed") and not quote_ok:
         # Keep the rejected quote: a Gate B rejection is undiagnosable without it.
         reasons.append(f'source quote did not ground in the source text: "{quote}"')
-    if resolution == "critique-contradicted" and truncated:
+    if resolution in ("critique-contradicted", "critique-narrowed") and truncated:
         reasons.append("source was truncated for the check; demotion not honored")
     detail = f" [{'; '.join(reasons)}]" if reasons else ""
     _append_note(finding, f"{tag} unresolved{detail}: {payload['reasoning']}")
@@ -316,10 +327,12 @@ async def _run_source_check(
         else:
             kept.append(f)
     n_upheld = sum(1 for f in queue if f.verified == "upheld")
+    n_narrowed = sum(1 for f in queue if f.verified == "softened")
     n_refuted = sum(1 for f in queue if f.verified == "refuted")
+    n_unresolved = len(queue) - n_upheld - n_narrowed - n_refuted
     run.source_check_summary = (
         f"{len(queue)} unverifiable finding(s) checked: {n_upheld} upheld, "
-        f"{n_refuted} refuted, {len(queue) - n_upheld - n_refuted} unresolved"
+        f"{n_narrowed} narrowed, {n_refuted} refuted, {n_unresolved} unresolved"
     )
     return kept
 

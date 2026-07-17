@@ -168,7 +168,12 @@ SOURCE_CHECK_SCHEMA: dict = {
         },
         "resolution": {
             "type": "string",
-            "enum": ["critique-confirmed", "critique-contradicted", "unresolved"],
+            "enum": [
+                "critique-confirmed",
+                "critique-narrowed",
+                "critique-contradicted",
+                "unresolved",
+            ],
         },
         "source_quote": {
             "type": "string",
