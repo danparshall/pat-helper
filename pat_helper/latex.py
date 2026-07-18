@@ -86,20 +86,51 @@ def _strip_document_envelope(
     return lines[start:stop]
 
 
+# Page-furniture detection: a line is furniture when its digit-masked form
+# (page numbers vary: 'Working Paper 16' vs '17') recurs at least this many
+# times AND carries enough letters to be a running header/footer rather than
+# a math fragment or table row. Observed live (step-15 Svanberg specimen,
+# 2026-07-17): a running header spliced mid-sentence at a page break dragged
+# a genuine checker quote below the grounding floor (0.834 vs 0.85).
+_FURNITURE_MIN_REPEATS = 5
+_FURNITURE_MIN_ALPHA = 4
+_DIGITS_RE = re.compile(r"\d+")
+
+
+def _furniture_mask(line: str) -> str:
+    return _DIGITS_RE.sub("#", line).strip()
+
+
 def load_text_source(path: str | Path) -> FlattenedPaper:
     """Load a plain-text file (e.g. a pdftotext extraction) as a FlattenedPaper.
 
     Source texts must NOT go through `load_paper`: its LaTeX comment-stripping
     would truncate any line containing a bare '%' (ubiquitous in extracted
-    econ text). No flattening, no envelope stripping — the text as-is, with a
-    line map so quote grounding can report (file, line) locations.
+    econ text). No flattening, no envelope stripping — but repeated page
+    furniture (running headers/footers) IS dropped, because pdftotext splices
+    it mid-sentence at page breaks and that breaks quote grounding. The line
+    map keeps ORIGINAL file line numbers for (file, line) reporting.
     """
     p = Path(path).resolve()
     lines = p.read_text(errors="replace").splitlines()
+    mask_counts: dict[str, int] = {}
+    for line in lines:
+        mask = _furniture_mask(line)
+        if mask:
+            mask_counts[mask] = mask_counts.get(mask, 0) + 1
+
+    def is_furniture(line: str) -> bool:
+        mask = _furniture_mask(line)
+        return (
+            mask_counts.get(mask, 0) >= _FURNITURE_MIN_REPEATS
+            and sum(c.isalpha() for c in mask) >= _FURNITURE_MIN_ALPHA
+        )
+
+    kept = [(line, i) for i, line in enumerate(lines, start=1) if not is_furniture(line)]
     return FlattenedPaper(
         name=p.stem,
-        text="\n".join(lines),
-        line_origins=[SourceLocation(file=p.name, line=i) for i in range(1, len(lines) + 1)],
+        text="\n".join(line for line, _ in kept),
+        line_origins=[SourceLocation(file=p.name, line=i) for _, i in kept],
     )
 
 
