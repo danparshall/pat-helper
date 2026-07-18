@@ -68,6 +68,15 @@ symlink untracked (cosmetic).
 
 ## Recent Sessions
 
+- 2026-07-16/17: [source-check] step 15 live specimens — plan Part C
+  complete. Davidson: refuted (Dan: correct). Svanberg: narrowed → softened
+  after four live-caught TDD fixes (LaTeX-tie citation extraction; Gate B
+  rejected-quote logging; new `critique-narrowed` resolution → softened;
+  page-furniture stripping in load_text_source), 95/95 green. Dan's ground
+  truth: partially-valid critiques must survive as reminders, not demote.
+  Carried open: verdict-lattice/provenance question.
+  Convo: `docs/active/source-check/convos/20260716_step15_live_specimens.md`.
+
 - 2026-07-16: [source-check] implemented stage 3.5 (Parts A+B, TDD, 85/85
   green) and passed the step-14 fixture gate (recall 3/3, citation-mismatch
   defect resolved 2 upheld/0 refuted/0 unresolved) after the gate caught two

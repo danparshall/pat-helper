@@ -2,6 +2,39 @@
 
 Branch: `source-check` · opened 2026-07-14
 
+## Session: 2026-07-16/17 — step 15 live specimens (plan Part C complete)
+
+### Topics Explored
+- Plan step 15: both reverify unverifiable specimens (Svanberg tex:268,
+  Davidson tex:2004) through stage 3.5 against Dan's supplied extractions;
+  Dan adjudicated. Convo: `convos/20260716_step15_live_specimens.md`
+
+### Provisional Findings
+- Davidson: **refuted** (both gates) — Dan: correct. Svanberg: after four
+  in-session fixes, **narrowed → softened** with exactly the vision-scope +
+  $165k reminders Dan wanted — Dan's ground truth: "not TOTALLY wrong…
+  I'd prefer the reminder"
+- Four live-caught defects, all fixed TDD (95/95): LaTeX ties/`\&` blocked
+  citation extraction (`4581e3e`); Gate B discarded rejected quotes
+  (`4a0edfe`); binary resolution vocabulary rounded partial validity to
+  demotion — added `critique-narrowed` → `softened` (`f4e2c7a`); pdftotext
+  page furniture broke page-spanning quote grounding (`797cb88`)
+- Fix-ordering lesson: the resolution boundary, not the fuzzy threshold,
+  was load-bearing — grounding fix alone would have shipped a wrong demotion
+- Working papers lack printed years; sidecar hand-correction recourse
+  exercised and worked
+
+### Results
+- `results/20260717_step15_live_specimens.md` (chronology, adjudications,
+  defects, provenance); raw runs in `data/harness_out_v9/` (gitignored)
+
+### Next Steps
+- Verdict-lattice/provenance design question (carried; still open)
+- Carried: Dan's extras/demoted skim for verify-calibration ground truth
+- Plan Part C complete — branch nearing merge-readiness discussion
+
+
+
 ## Session: 2026-07-16 — source-check implementation (Parts A+B + fixture gate)
 
 ### Topics Explored
