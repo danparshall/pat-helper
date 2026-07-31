@@ -157,6 +157,13 @@ def _append_note(finding: Finding, note: str) -> None:
 # truncated read, so truncation forbids "critique-contradicted".
 SOURCE_CHAR_CAP = 400_000
 
+# Appended to a merged finding that synthesis flags as echoing a source-
+# refuted demotion. Factual, not alarmist — the finding keeps its verdict.
+SIBLING_REFUTED_WARNING = (
+    "warning: a sibling formulation of this critique was refuted against the"
+    " cited source; see appendix"
+)
+
 
 async def _source_check_one(
     finding: Finding,
@@ -441,6 +448,19 @@ async def run_review(
             indent=2,
             ensure_ascii=False,
         )
+        # Source-refuted demotions enter as a read-only digest so surviving
+        # echoes can be flagged. Text-only refutations stay out: they lack
+        # the ground-truth standing that makes the warning trustworthy.
+        digest_entries = [d for d in run.demoted if d.verify_provenance == "source"]
+        if digest_entries:
+            user += "\n\n# DEMOTED (refuted against source)\n\n" + json.dumps(
+                [
+                    {"id": i, "lens": d.lens, "quote": d.quote, "note": d.verify_notes}
+                    for i, d in enumerate(digest_entries)
+                ],
+                indent=2,
+                ensure_ascii=False,
+            )
         try:
             payload = await _with_retries(
                 config,
@@ -495,6 +515,17 @@ async def run_review(
                         verify_provenance=verdict.provenance,
                         verify_notes=notes,
                     )
+                    echo_ids = item.get("echoes_demoted", [])
+                    bad_echoes = [i for i in echo_ids if not (0 <= i < len(digest_entries))]
+                    if bad_echoes:
+                        run.gaps.append(
+                            f"synthesis × {synth_provider.name}: echoes_demoted id(s)"
+                            f" {bad_echoes} invalid; ignored"
+                        )
+                    if any(0 <= i < len(digest_entries) for i in echo_ids):
+                        # Annotation only, never a verdict change: synthesis
+                        # dedup lacks kill authority.
+                        _append_note(f, SIBLING_REFUTED_WARNING)
                     # Re-ground merged quotes (synthesis must not alter quotes;
                     # trust but verify)
                     match = check_quote(f.quote, paper, config.fuzzy_threshold)

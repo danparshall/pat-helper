@@ -1001,3 +1001,101 @@ async def test_out_of_range_contributor_id_falls_back_to_pass_through(paper):
     assert len(run.findings) == 1
     assert run.findings[0].quote == GROUNDED_QUOTE
     assert any("invalid" in g for g in run.gaps)
+
+
+# --- Demoted digest (plan Part 3): source-refuted demotions are shown to
+# synthesis as a read-only digest so surviving echoes of a ground-truth-
+# refuted critique can be flagged — annotation only, never a verdict change.
+
+ECHO_WARNING = (
+    "warning: a sibling formulation of this critique was refuted against the"
+    " cited source; see appendix"
+)
+
+
+def _digest_pair():
+    """(finder, checker): finding 0 cites Svanberg and gets source-refuted
+    (contradicted, both gates pass); finding 1 carries no citation and
+    survives as text-tier unverifiable."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(evidence=CITED_EVIDENCE),
+            make_finding(quote=SECOND_GROUNDED_QUOTE),
+        ],
+        source_index=SOURCE_MARKERS,
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-contradicted",
+    )
+    return finder, checker
+
+
+async def test_source_refuted_demotions_enter_synthesis_digest(paper, sources_dir):
+    finder, checker = _digest_pair()
+    await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    synth = [u for p in (finder, checker) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    text = _user_text(synth[0])
+    assert "# DEMOTED (refuted against source)" in text
+    digest_section = text.split("# DEMOTED (refuted against source)")[1]
+    assert GROUNDED_QUOTE in digest_section  # the refuted finding's quote
+    assert "critique-contradicted" in digest_section  # its note travels too
+
+
+async def test_echoes_demoted_appends_warning_to_merged_finding(paper, sources_dir):
+    finder, checker = _digest_pair()
+    finder.synthesis_echo = [
+        {
+            **make_finding(quote=SECOND_GROUNDED_QUOTE),
+            "lens": "l0",
+            "models": ["finder"],
+            "contributors": [0],
+            "echoes_demoted": [0],
+        }
+    ]
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    assert len(run.findings) == 1
+    assert ECHO_WARNING in run.findings[0].verify_notes
+
+
+async def test_text_only_refuted_demotions_stay_out_of_digest(paper):
+    """Text-only refutations lack the ground-truth standing that makes the
+    warning trustworthy — they never enter the digest, and with no source-
+    refuted demotions the digest section is omitted entirely."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(),  # HIGH -> verified refuted by the refuter
+            make_finding(quote=SECOND_GROUNDED_QUOTE, severity="LOW"),  # survivor
+        ],
+    )
+    refuter = FakeProvider("refuter", findings=[], verdict="refuted")
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert any(f.verified == "refuted" for f in run.demoted)  # setup sanity
+    synth = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    assert "# DEMOTED" not in _user_text(synth[0])
+
+
+async def test_invalid_echoes_demoted_id_is_ignored_with_gap(paper, sources_dir):
+    """The field is advisory: a bad digest id costs a gap entry, never a
+    warning and never the whole stage."""
+    finder, checker = _digest_pair()
+    finder.synthesis_echo = [
+        {
+            **make_finding(quote=SECOND_GROUNDED_QUOTE),
+            "lens": "l0",
+            "models": ["finder"],
+            "contributors": [0],
+            "echoes_demoted": [9],
+        }
+    ]
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    assert len(run.findings) == 1
+    notes = run.findings[0].verify_notes or ""
+    assert ECHO_WARNING not in notes
+    assert any("echoes_demoted" in g for g in run.gaps)
