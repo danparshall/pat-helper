@@ -18,8 +18,12 @@ Rules:
    first within each level.
 6. Convergence across models is weak evidence of validity, not proof — do not
    inflate severity just because several models agree.
-7. Every input finding carries a "verified" state. Set the merged finding's
-   "verified" to the most conservative among its contributors —
-   "unverifiable" > "softened" > "upheld" > "none" (use the string "none"
-   when no contributor was verified). Never invent a state and never drop
-   one: a finding flagged "unverifiable" stays "unverifiable" after merging.
+7. Every input finding carries an "id". Every output finding must list in
+   "contributors" the input ids it merges (a finding kept as-is lists its own
+   id alone). Every input id must appear in exactly one output finding —
+   never drop an id, never list one twice. Merged verification is computed
+   downstream from these ids; do not report it.
+8. If a "DEMOTED (refuted against source)" digest is present, set
+   "echoes_demoted" to the digest ids whose critique an output finding
+   restates or relies on; use an empty array when none apply (the common
+   case). This never changes the finding — it only flags it for the reader.

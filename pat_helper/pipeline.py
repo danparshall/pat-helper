@@ -26,6 +26,7 @@ from pathlib import Path
 
 from pat_helper.config import ReviewConfig
 from pat_helper.latex import FlattenedPaper, load_text_source
+from pat_helper.lattice import merge_verdict
 from pat_helper.models import (
     FINDINGS_SCHEMA,
     SOURCE_CHECK_SCHEMA,
@@ -436,7 +437,9 @@ async def run_review(
     if survivors:
         synth_provider = next((p for p in providers if healthy.get(p.name)), providers[0])
         user = "# VERIFIED FINDINGS\n\n" + json.dumps(
-            [f.to_json() for f in survivors], indent=2, ensure_ascii=False
+            [{"id": i, **f.to_json()} for i, f in enumerate(survivors)],
+            indent=2,
+            ensure_ascii=False,
         )
         try:
             payload = await _with_retries(
@@ -448,31 +451,69 @@ async def run_review(
                     max_output_tokens=config.synthesis_max_output_tokens,
                 ),
             )
-            merged = []
-            for item in payload["findings"]:
-                models = item.get("models") or []
-                verified = item.get("verified", "none")
-                f = Finding(
-                    lens=item["lens"],
-                    model=models[0] if models else synth_provider.name,
-                    quote=item["quote"],
-                    evidence=item["evidence"],
-                    severity=Severity(item["severity"]),
-                    suggested_fix=item["suggested_fix"],
-                    models=models,
-                    verified=None if verified == "none" else verified,
+            # Contributor bookkeeping is validated before anything is trusted.
+            # Duplicate / out-of-range / empty contributor lists mean the
+            # bookkeeping cannot be trusted at all -> whole-stage pass-through.
+            # Dropped ids are recoverable: merge the valid outputs, append the
+            # dropped originals unmerged (better than the old contract, where
+            # synthesis could silently drop findings).
+            all_ids = [i for item in payload["findings"] for i in item["contributors"]]
+            valid_range = all(0 <= i < len(survivors) for i in all_ids)
+            no_duplicates = len(all_ids) == len(set(all_ids))
+            no_empty = all(item["contributors"] for item in payload["findings"])
+            if not (valid_range and no_duplicates and no_empty):
+                run.gaps.append(
+                    f"synthesis × {synth_provider.name}: contributor bookkeeping invalid;"
+                    " passing through unmerged"
                 )
-                # Re-ground merged quotes (synthesis must not alter quotes; trust but verify)
-                match = check_quote(f.quote, paper, config.fuzzy_threshold)
-                f.grounded = match.found
-                f.grounding_score = match.score
-                f.location_label = match.location.label if match.location else None
-                if match.found:
-                    merged.append(f)
-                else:
-                    f.verify_notes = "synthesis altered the quote; demoted"
-                    run.demoted.append(f)
-            run.findings = merged
+                run.findings = survivors
+            else:
+                merged = []
+                for item in payload["findings"]:
+                    models = item.get("models") or []
+                    contributors = [survivors[i] for i in item["contributors"]]
+                    verdict = merge_verdict(contributors)
+                    notes = None
+                    if verdict.provenance == "source":
+                        # The winning tier's own notes plus the outranked
+                        # text-tier flags, so the reader sees the dissent.
+                        parts = [
+                            f.verify_notes
+                            for f in contributors
+                            if f.verify_provenance == "source" and f.verify_notes
+                        ] + verdict.annotations
+                        notes = " ".join(parts) if parts else None
+                    f = Finding(
+                        lens=item["lens"],
+                        model=models[0] if models else synth_provider.name,
+                        quote=item["quote"],
+                        evidence=item["evidence"],
+                        severity=Severity(item["severity"]),
+                        suggested_fix=item["suggested_fix"],
+                        models=models,
+                        verified=verdict.verified,
+                        verify_provenance=verdict.provenance,
+                        verify_notes=notes,
+                    )
+                    # Re-ground merged quotes (synthesis must not alter quotes;
+                    # trust but verify)
+                    match = check_quote(f.quote, paper, config.fuzzy_threshold)
+                    f.grounded = match.found
+                    f.grounding_score = match.score
+                    f.location_label = match.location.label if match.location else None
+                    if match.found:
+                        merged.append(f)
+                    else:
+                        f.verify_notes = "synthesis altered the quote; demoted"
+                        run.demoted.append(f)
+                dropped = sorted(set(range(len(survivors))) - set(all_ids))
+                if dropped:
+                    run.gaps.append(
+                        f"synthesis × {synth_provider.name}: omitted input id(s) {dropped};"
+                        " appended unmerged"
+                    )
+                    merged.extend(survivors[i] for i in dropped)
+                run.findings = merged
         except Exception as exc:  # noqa: BLE001
             run.gaps.append(
                 f"synthesis × {synth_provider.name}: failed ({exc}); passing through unmerged"

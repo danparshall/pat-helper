@@ -209,11 +209,22 @@ SYNTHESIS_SCHEMA: dict = {
                     **_FINDING_PROPS,
                     "lens": {"type": "string"},
                     "models": {"type": "array", "items": {"type": "string"}},
-                    # String sentinel "none" rather than a JSON-null union:
-                    # Gemini's structured-output path chokes on union types.
-                    "verified": {
-                        "type": "string",
-                        "enum": ["upheld", "softened", "refuted", "unverifiable", "none"],
+                    # Merged verification is computed downstream by the lattice
+                    # from these input ids — synthesis never reports a verdict.
+                    # Plain integer arrays are safe for Gemini's structured-
+                    # output path (unions are not).
+                    "contributors": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Input finding ids merged into this output finding",
+                    },
+                    "echoes_demoted": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": (
+                            "Ids from the DEMOTED (refuted against source) digest that this"
+                            " finding echoes; empty when none apply"
+                        ),
                     },
                 },
                 "required": [
@@ -223,7 +234,8 @@ SYNTHESIS_SCHEMA: dict = {
                     "suggested_fix",
                     "lens",
                     "models",
-                    "verified",
+                    "contributors",
+                    "echoes_demoted",
                 ],
                 "additionalProperties": False,
             },

@@ -6,6 +6,7 @@ distinguishes call kinds.
 """
 
 import asyncio
+import re
 from pathlib import Path
 
 import pytest
@@ -136,10 +137,19 @@ class FakeProvider(Provider):
         if kind == "synthesis":
             if self.synthesis_echo is not None:
                 return {"findings": self.synthesis_echo}
-            # Echo back merged findings: one merged finding crediting two models
+            # Echo back merged findings: one merged finding crediting two
+            # models and claiming every input id (the digest section, when
+            # present, carries its own ids and is excluded).
+            input_section = _user_text(user).split("# DEMOTED")[0]
+            ids = [int(m) for m in re.findall(r'"id": (\d+)', input_section)]
             return {
                 "findings": [
-                    {**make_finding(), "lens": "l0", "models": ["fake-a", "fake-b"]},
+                    {
+                        **make_finding(),
+                        "lens": "l0",
+                        "models": ["fake-a", "fake-b"],
+                        "contributors": ids,
+                    },
                 ]
             }
         if kind == "source_index":
@@ -270,18 +280,27 @@ async def test_synthesis_input_includes_verified_state(paper):
 
 async def test_synthesis_preserves_verified_state(paper):
     """Verification state must survive the synthesis merge into the final
-    report: 'unverifiable' passes through; the 'none' sentinel maps to None."""
+    report: an 'unverifiable' contributor keeps its flag through a 1:1 merge,
+    and a never-verified (LOW) contributor merges to None — both now computed
+    by the lattice from contributor ids, not reported by the model."""
     echo = [
-        {**make_finding(), "lens": "l0", "models": ["finder"], "verified": "unverifiable"},
+        {**make_finding(), "lens": "l0", "models": ["finder"], "contributors": [0]},
         {
             **make_finding(quote=SECOND_GROUNDED_QUOTE),
             "lens": "l0",
-            "models": ["refuter"],
-            "verified": "none",
+            "models": ["finder"],
+            "contributors": [1],
         },
     ]
-    finder = FakeProvider("finder", synthesis_echo=echo)
-    refuter = FakeProvider("refuter", verdict="unverifiable")
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(),
+            make_finding(quote=SECOND_GROUNDED_QUOTE, severity="LOW"),
+        ],
+        synthesis_echo=echo,
+    )
+    refuter = FakeProvider("refuter", findings=[], verdict="unverifiable")
     run = await run_review(paper, [finder, refuter], lenses(1), config())
     by_quote = {f.quote: f for f in run.findings}
     assert by_quote[GROUNDED_QUOTE].verified == "unverifiable"
@@ -882,3 +901,103 @@ async def test_synthesis_input_includes_provenance(paper):
     synth = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
     assert synth, "synthesis was never called"
     assert '"verify_provenance": "text"' in _user_text(synth[0])
+
+
+# --- Contributor bookkeeping (plan Part 2): synthesis reports which input ids
+# merged into each output finding; the merged verdict comes from the lattice,
+# never from the synthesis payload. Invalid bookkeeping degrades safely.
+
+
+async def test_merged_verdict_comes_from_lattice_not_payload(paper):
+    """Synthesis has no say over merged verification: a payload merging a
+    text-softened and a text-upheld contributor yields the lattice's answer
+    (most conservative: softened)."""
+    echo = [
+        {**make_finding(), "lens": "l0", "models": ["finder", "refuter"], "contributors": [0, 1]}
+    ]
+    finder = FakeProvider("finder", synthesis_echo=echo)  # verifies refuter's finding: upheld
+    refuter = FakeProvider("refuter", verdict="softened")  # verifies finder's finding: softened
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "softened"
+    assert f.verify_provenance == "text"
+
+
+async def test_source_verdict_outranks_text_sibling_in_merge_with_annotation(paper, sources_dir):
+    """The step-14 run-3 collision, end to end: a source-check-upheld finding
+    merged with a text-only sibling renders upheld (source-checked), and the
+    outranked sibling's flag survives as an annotation in the notes."""
+    finder = FakeProvider(
+        "finder",
+        findings=[
+            make_finding(evidence=CITED_EVIDENCE),
+            make_finding(quote=SECOND_GROUNDED_QUOTE),
+        ],
+        source_index=SOURCE_MARKERS,
+        synthesis_echo=[
+            {**make_finding(), "lens": "l0", "models": ["finder"], "contributors": [0, 1]}
+        ],
+    )
+    checker = FakeProvider(
+        "checker",
+        findings=[],
+        verdict="unverifiable",
+        source_check_resolution="critique-confirmed",
+    )
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "upheld"
+    assert f.verify_provenance == "source"
+    assert "[source-check:checker" in f.verify_notes
+    assert "[outranked text-only unverifiable]" in f.verify_notes
+
+
+async def test_dropped_input_id_appends_original_unmerged_with_gap(paper):
+    """Synthesis silently dropping a finding is the failure the old contract
+    couldn't see. Now every input id must appear in exactly one output; a
+    dropped id's original finding is appended unmerged and the drop recorded."""
+    echo = [{**make_finding(), "lens": "l0", "models": ["finder"], "contributors": [0]}]
+    finder = FakeProvider(
+        "finder",
+        findings=[make_finding(), make_finding(quote=SECOND_GROUNDED_QUOTE)],
+        synthesis_echo=echo,
+    )
+    refuter = FakeProvider("refuter", findings=[])
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert len(run.findings) == 2
+    quotes = [f.quote for f in run.findings]
+    assert SECOND_GROUNDED_QUOTE in quotes  # the dropped original survived
+    assert any("omitted" in g for g in run.gaps)
+
+
+async def test_duplicate_contributor_id_falls_back_to_pass_through(paper):
+    """An id claimed by two outputs means the bookkeeping cannot be trusted at
+    all — the whole stage degrades to unmerged pass-through plus a gap."""
+    echo = [
+        {**make_finding(), "lens": "l0", "models": ["finder"], "contributors": [0]},
+        {
+            **make_finding(quote=SECOND_GROUNDED_QUOTE),
+            "lens": "l0",
+            "models": ["finder"],
+            "contributors": [0],
+        },
+    ]
+    finder = FakeProvider("finder", synthesis_echo=echo)
+    refuter = FakeProvider("refuter", findings=[])
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert len(run.findings) == 1  # the one real survivor, passed through
+    assert run.findings[0].quote == GROUNDED_QUOTE
+    assert run.findings[0].verified == "upheld"  # untouched original state
+    assert any("invalid" in g for g in run.gaps)
+
+
+async def test_out_of_range_contributor_id_falls_back_to_pass_through(paper):
+    echo = [{**make_finding(), "lens": "l0", "models": ["finder"], "contributors": [7]}]
+    finder = FakeProvider("finder", synthesis_echo=echo)
+    refuter = FakeProvider("refuter", findings=[])
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert len(run.findings) == 1
+    assert run.findings[0].quote == GROUNDED_QUOTE
+    assert any("invalid" in g for g in run.gaps)
