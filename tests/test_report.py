@@ -119,3 +119,50 @@ def test_coverage_gaps_are_reported():
 def test_zero_findings_renders_clean_report():
     out = render(_run([]))
     assert "No findings" in out
+
+
+def test_source_checked_verdict_renders_provenance_tag():
+    """A verdict earned against the actual cited source must say so — the
+    (source-checked) tag is the reader-facing payoff of the whole stage."""
+    f = _finding(
+        verified="upheld",
+        verify_provenance="source",
+        verify_notes="[source-check:gemini svanberg.txt@ab12cd34] critique-confirmed",
+    )
+    out = render(_run([f]))
+    assert "*verification:* upheld (source-checked)" in out
+
+
+def test_text_verdict_renders_without_source_tag():
+    f = _finding(verified="upheld", verify_provenance="text")
+    out = render(_run([f]))
+    assert "*verification:* upheld" in out
+    assert "(source-checked)" not in out
+
+
+def test_outranked_annotation_is_reader_visible():
+    """The carried text-tier dissent must reach the reader, not just the data
+    structure."""
+    f = _finding(
+        verified="upheld",
+        verify_provenance="source",
+        verify_notes=(
+            "[source-check:gemini x.txt@ab12cd34] critique-confirmed"
+            " [outranked text-only softened] [gpt] the charge is overstated"
+        ),
+    )
+    out = render(_run([f]))
+    assert "[outranked text-only softened] [gpt] the charge is overstated" in out
+
+
+def test_sibling_refuted_warning_is_reader_visible():
+    f = _finding(
+        verified="unverifiable",
+        verify_provenance="text",
+        verify_notes=(
+            "[gpt] cannot check warning: a sibling formulation of this critique"
+            " was refuted against the cited source; see appendix"
+        ),
+    )
+    out = render(_run([f]))
+    assert "refuted against the cited source; see appendix" in out

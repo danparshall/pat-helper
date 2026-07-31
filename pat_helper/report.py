@@ -30,7 +30,9 @@ def _render_finding(f: Finding) -> str:
             " asserts this material exists outside the text; confirm it does"
         )
     else:
-        verification = f" · *verification:* {f.verified}" if f.verified else ""
+        # A verdict earned against the actual cited source says so.
+        tag = " (source-checked)" if f.verify_provenance == "source" else ""
+        verification = f" · *verification:* {f.verified}{tag}" if f.verified else ""
     lines = [
         f"### [{f.lens}]{loc}",
         "",
