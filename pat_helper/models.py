@@ -50,6 +50,12 @@ class Finding:
     grounding_score: float | None = None
     location_label: str | None = None
     verified: str | None = None  # "upheld" | "softened" | "refuted" | "unverifiable" | None
+    # Which tier produced the verdict: "text" (adversarial verify against the
+    # paper text) or "source" (checked against the actual cited source).
+    # Set exactly where verdicts are set; never parsed from notes. The verify
+    # exception path leaves it None so its default can never outrank a real
+    # verdict at merge time.
+    verify_provenance: str | None = None
     verify_notes: str | None = None
     models: list[str] = field(default_factory=list)  # all contributing models
 
@@ -65,6 +71,7 @@ class Finding:
             "location": self.location_label,
             "grounding_score": self.grounding_score,
             "verified": self.verified,
+            "verify_provenance": self.verify_provenance,
         }
 
 

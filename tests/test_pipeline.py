@@ -803,3 +803,82 @@ async def test_no_sources_dir_makes_no_source_calls_and_pins_current_behavior(pa
     assert '"verified": "unverifiable"' in _user_text(synth[0])
     # the user-visible surface is unchanged: no source-check section renders
     assert "Source check" not in render(run)
+
+
+# --- Verdict provenance (docs/active/source-check/plans/20260731_verdict_lattice_provenance.md)
+# Provenance is set exactly where verdicts are set — "text" by the adversarial
+# verifier, "source" by the source-check stage — and never parsed from notes.
+# It is the input the lattice ranks on (source outranks text at merge time).
+
+
+async def test_verify_success_sets_text_provenance(paper):
+    finder = FakeProvider("finder", truncate_synthesis=True)  # pass-through
+    refuter = FakeProvider("refuter")  # verify succeeds: upheld
+    run = await run_review(paper, [finder, refuter], lenses(1), config())
+    assert run.findings
+    assert all(f.verify_provenance == "text" for f in run.findings)
+
+
+async def test_failed_verification_leaves_provenance_unset(paper):
+    """The verify exception path defaults to 'upheld' without any model having
+    actually read the critique — that default must never carry a provenance
+    tier, or it could outrank a real verdict at merge time."""
+    finder = FakeProvider("finder", truncate_synthesis=True)  # pass-through
+    dead = FakeProvider("dead", fail_always=True)  # refuter dies after retries
+    run = await run_review(paper, [finder, dead], lenses(1), config())
+    assert len(run.findings) == 1
+    f = run.findings[0]
+    assert f.verified == "upheld"
+    assert "verification unavailable" in f.verify_notes
+    assert f.verify_provenance is None
+
+
+async def test_source_check_upheld_sets_source_provenance(paper, sources_dir):
+    finder, checker = _source_pair("critique-confirmed")
+    finder.truncate_synthesis = True  # pass-through so provenance is observable
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    f = run.findings[0]
+    assert f.verified == "upheld"
+    assert f.verify_provenance == "source"
+
+
+async def test_source_check_softened_sets_source_provenance(paper, sources_dir):
+    finder, checker = _source_pair("critique-narrowed")
+    finder.truncate_synthesis = True
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    f = run.findings[0]
+    assert f.verified == "softened"
+    assert f.verify_provenance == "source"
+
+
+async def test_source_check_refuted_sets_source_provenance(paper, sources_dir):
+    """The demoted entry keeps its provenance — Part 3's demoted digest
+    selects exactly the source-refuted entries by this field."""
+    finder, checker = _source_pair("critique-contradicted")
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    demoted = [f for f in run.demoted if f.evidence == CITED_EVIDENCE]
+    assert len(demoted) == 1
+    assert demoted[0].verified == "refuted"
+    assert demoted[0].verify_provenance == "source"
+
+
+async def test_source_check_unresolved_keeps_text_provenance(paper, sources_dir):
+    """An unresolved check changes nothing: the finding keeps the verdict AND
+    the provenance the text-tier verifier gave it."""
+    finder, checker = _source_pair("unresolved")
+    finder.truncate_synthesis = True
+    run = await run_review(paper, [finder, checker], lenses(1), config(sources_dir=sources_dir))
+    f = run.findings[0]
+    assert f.verified == "unverifiable"
+    assert f.verify_provenance == "text"
+
+
+async def test_synthesis_input_includes_provenance(paper):
+    """Provenance is part of the synthesis contract: the merge (Part 2) needs
+    it on every input finding to rank contributors."""
+    finder = FakeProvider("finder")
+    refuter = FakeProvider("refuter")
+    await run_review(paper, [finder, refuter], lenses(1), config())
+    synth = [u for p in (finder, refuter) for k, _s, u in p.calls if k == "synthesis"]
+    assert synth, "synthesis was never called"
+    assert '"verify_provenance": "text"' in _user_text(synth[0])

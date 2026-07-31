@@ -138,8 +138,11 @@ async def _verify(
                 lambda: refuter.complete_json(verify_prompt(), user, VERDICT_SCHEMA),
             )
         finding.verified = payload["verdict"]
+        finding.verify_provenance = "text"
         finding.verify_notes = f"[{refuter.name}] {payload['reasoning']}"
     except Exception as exc:  # noqa: BLE001
+        # Default verdict, not a judged one — provenance stays None so it can
+        # never outrank a real verdict at merge time.
         finding.verified = "upheld"
         finding.verify_notes = f"verification unavailable ({refuter.name}: {exc})"
 
@@ -192,6 +195,7 @@ async def _source_check_one(
     quote_ok = check_quote(quote, source, config.fuzzy_threshold).found
     if resolution == "critique-confirmed" and identity_ok:
         finding.verified = "upheld"
+        finding.verify_provenance = "source"
         _append_note(
             finding, f'{tag} critique-confirmed — source: "{quote}" ({payload["reasoning"]})'
         )
@@ -202,6 +206,7 @@ async def _source_check_one(
     # the safe direction.
     if resolution == "critique-narrowed" and identity_ok and quote_ok and not truncated:
         finding.verified = "softened"
+        finding.verify_provenance = "source"
         _append_note(
             finding,
             f'{tag} critique-narrowed — source: "{quote}" ({payload["reasoning"]})',
@@ -209,6 +214,7 @@ async def _source_check_one(
         return
     if resolution == "critique-contradicted" and identity_ok and quote_ok and not truncated:
         finding.verified = "refuted"
+        finding.verify_provenance = "source"
         _append_note(
             finding,
             f'{tag} critique-contradicted — exonerating source quote: "{quote}"'
