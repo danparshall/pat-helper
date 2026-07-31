@@ -2,6 +2,30 @@
 
 Branch: `source-check` · opened 2026-07-14
 
+## Session: 2026-07-31 — verdict-lattice brainstorm
+
+### Topics Explored
+- The carried lattice/provenance question, worked from the step-14 run-3
+  collision specimen. Convo: `convos/20260731_verdict_lattice_brainstorm.md`
+
+### Provisional Findings
+- The 07-16 softening rationale is unrecoverable (no fixture checkpoint;
+  renderer drops `verify_notes`) — rationales that survive merges must be
+  structured, report-reaching data
+- Mirror case discovered: source-check-refuted findings demote
+  pre-synthesis, so a text-only-upheld sibling of a ground-truth-refuted
+  critique renders at full strength, unconnected
+
+### Decisions
+- (b): source-grounded verdicts outrank text-only in merged labels;
+  outranked softenings carried as annotations
+- Mirror: annotate-only demoted digest now (iii), symmetric propagation
+  later (i) — ticket filed
+- Plan: `plans/20260731_verdict_lattice_provenance.md`
+
+### Next Steps
+- Implement the plan (TDD); carried: Dan's extras/demoted skim
+
 ## Session: 2026-07-16/17 — step 15 live specimens (plan Part C complete)
 
 ### Topics Explored
