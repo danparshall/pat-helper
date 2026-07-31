@@ -16,9 +16,11 @@ specimen rather than the abstraction.
 Two load-bearing observations surfaced while pulling the specimen:
 
 1. **The softening rationale is unrecoverable.** The fixture harness kept
-   no checkpoint for the 07-16 run and the renderer never prints
-   `verify_notes`, so the only record of *why* the argumentation sibling
-   was softened died with the run. Dan's adjudication ("probably b, but
+   no checkpoint for the 07-16 run, and synthesis reconstruction drops
+   contributor `verify_notes` at the merge (the renderer *would* print
+   them if present — pipeline.py:449–458 is the loss point, corrected
+   from the initial renderer diagnosis), so the only record of *why* the
+   argumentation sibling was softened died with the run. Dan's adjudication ("probably b, but
    can't recall what was said") was unanswerable from the system's own
    artifacts — itself evidence that merge-surviving rationales must be
    structured data that reaches the report.
