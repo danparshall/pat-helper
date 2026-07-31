@@ -20,7 +20,9 @@ Branch: `source-check` · opened 2026-07-14
 - (b): source-grounded verdicts outrank text-only in merged labels;
   outranked softenings carried as annotations
 - Mirror: annotate-only demoted digest now (iii), symmetric propagation
-  later (i) — ticket filed
+  later (i) — ticket filed (danparshall/pat-helper#2)
+- Deterministic merge post-processing approved (no free-text matching;
+  schema-validated enums + integer ids only)
 - Plan: `plans/20260731_verdict_lattice_provenance.md`
 
 ### Next Steps

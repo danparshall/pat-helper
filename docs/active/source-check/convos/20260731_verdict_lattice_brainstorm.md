@@ -67,15 +67,16 @@ Two load-bearing observations surfaced while pulling the specimen:
 
 ## Open Questions
 
-- Mechanism choice pending design validation: keep the lattice as a
-  synthesis-prompt rule, or move merged-verdict computation into
-  deterministic post-processing keyed on contributor ids in the synthesis
-  schema (testable; removes the can't-distinguish-policy-from-LLM-error
-  problem)?
-- Should the demoted digest cover all refuted findings or only
-  source-refuted ones? (Lean: source-refuted only — targeted, and
-  text-only refutations lack the ground-truth standing that makes the
-  annotation trustworthy.)
+- ~~Mechanism choice~~ RESOLVED in-session: deterministic post-processing
+  approved. Dan's condition — no greppy string-matching — holds: the
+  post-code consumes only schema-validated enums and integer ids;
+  `verify_notes` free text is write-only (carried and rendered, never
+  matched). Demoted digest scoped to source-refuted only (same session).
+- Synthesis compliance with contributor-id bookkeeping is unproven —
+  plan confidence Medium on that axis; the paid fixture gate (plan step
+  22) is the test, and fallbacks degrade to correct-but-unmerged.
+- Warning wording strength for the echoed-demotion annotation (plan
+  footer question).
 - Checker prompt-compliance under identity collision remains n=1 (carried
   from step 14).
 
