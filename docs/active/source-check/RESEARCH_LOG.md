@@ -2,6 +2,31 @@
 
 Branch: `source-check` · opened 2026-07-14
 
+## Session: 2026-07-31→08-02 — verdict-lattice implementation + step-22 gate
+
+### Topics Explored
+- Full TDD implementation of `plans/20260731_verdict_lattice_provenance.md`
+  Parts 1–4 (zero-spend), then the Dan-approved step-22 paid gate.
+  Convo: `convos/20260731_verdict_lattice_part1.md`
+
+### Provisional Findings
+- Live synthesis complies with contributor-id bookkeeping (24 findings,
+  0 gaps — the plan's medium-confidence unknown resolved favorably)
+- Gate rendered `softened (source-checked)`, not the criterion's `upheld`:
+  two source-tier verdicts (anthropic confirmed / google narrowed),
+  within-tier conservatism decided — checker-calibration question, not a
+  code defect; annotation + tag + recall 3/3 all clean
+- Part 3 demoted digest not exercised live (0 demoted this run)
+
+### Results
+- `results/20260802_step22_lattice_gate.md`; raw runs in
+  `data/harness_out_v9/*_2026-08-02.md` (gitignored)
+- Commits `2f2c6d9`, `1c2b187`, `534e7d6`, `b634e85`; suite 123/123
+
+### Next Steps
+- Dan adjudicates the softened-vs-upheld checker-calibration question
+- Carried: extras/demoted skim (issue #1); symmetric propagation (issue #2)
+
 ## Session: 2026-07-31 — verdict-lattice brainstorm
 
 ### Topics Explored
