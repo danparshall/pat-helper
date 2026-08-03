@@ -1,6 +1,7 @@
 # Verdict Lattice Part 1–4 Implementation + Step-22 Gate
 
-**Date:** 2026-07-31 → 2026-08-02 (session spanned days; gate ran 08-02)
+**Date:** 2026-07-31 → 2026-08-03 (gate ran 08-02; closed 08-03 with the
+checker-calibration question unadjudicated)
 **Branch:** source-check
 **Machine:** Dans-MacBook-Pro
 
