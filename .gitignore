@@ -12,8 +12,9 @@ __pycache__/
 .env.*
 !.env.example
 
-# Unpublished drafts / private inputs (Dan's .tex lives here)
-data/
+# Unpublished drafts / private inputs (Dan's .tex lives here).
+# Anchored /data covers both a real dir and the symlink into ~/data/pat-helper/.
+/data
 
 # Editor
 .DS_Store
