@@ -85,6 +85,39 @@ Kept in gitignored `data/` (they quote the private draft):
   — run 2, empty (8 billing gaps)
 - Logs alongside each.
 
+## Addendum (2026-10-14, same session)
+
+- **Applying the findings / citation checks.** The sources lens checks no
+  citations; it can only see the draft's own tags. Spun off branch
+  `paper-finder` (see its convo `20261014_paper_finder_kickoff.md`) and a new
+  repo `~/code/paper-library` to get the cited sources.
+- **Contamination.** This session read the verification repo's own
+  power-side claim check (summary, ~5 ledger rows, STATUS entry) and proposed
+  it as ground truth. Dan rejected that: pat-helper must not compare notes
+  with other citation checks. The rule now in CLAUDE.md: other repos'
+  `PAPER_INDEX.md`, `PAPER_SUMMARIES.md`, `papers/` and `papers/text/` are
+  freely readable; other checks/reviews/audits of a draft under review are
+  off limits. This session's judgments about the power-side report's
+  substance are not independent — calibration needs a clean session.
+- **Headline discussion** (before the contamination): "can often" is hedged,
+  not "always"; Dan: Rahman's prior was that power monitoring is impossible,
+  so "surprisingly" is earned. Suggested reframe: lead with the existence
+  result against Rahman's claim; "often" is the weak word against an
+  adaptive evader.
+- **Hard-constraint facts.** A web agent found ODEC's radial 69 kV planning
+  caps (10,000 consumers, 50 MW, 700 MW-miles); Dan and Claude reasoned from
+  them (night noise floor, flat load invisible in aggregates → AMI, service
+  area, thermal search, Kyllo/Naperville). Filed as verification#71; Dan
+  asked that such facts be actively sought and surfaced → standing guidance
+  in dotfiles `personal_info.md` (`22518d6`).
+- **Keys.** `.env.personal` (via `~/data/_envs/pat-helper/.env`) holds
+  `ANTHROPIC_API_KEY` (Dan's personal key, no longer read by pat-helper) and
+  `PAPER_ASSISTANT_KEY` (the only Anthropic key pat-helper uses). No OpenAI or
+  Gemini key is configured, so multi-provider runs — and with them the
+  adversarial-verify stage — are unavailable until Dan adds personal keys
+  (`OPENAI_API_KEY`, `GEMINI_API_KEY`). The corporate file was quarantined
+  as `.env.corporate.ACCIDENTAL-FROM-ECON-IMPACT`.
+
 ## Open Questions
 
 - Single-provider verify: worth a same-model refuter mode, or is that too weak
@@ -93,4 +126,7 @@ Kept in gitignored `data/` (they quote the private draft):
   collide?
 - Model defaults are still the July set; refresh (with comparability cost)?
 - Is the review report worth re-running multi-provider once Dan decides how
-  widely the private draft can go to other vendors?
+  widely the private draft can go to other vendors? (Needs personal OpenAI
+  and Gemini keys first.)
+- Should OpenAI/Gemini also get dedicated pat-helper key names, like
+  `PAPER_ASSISTANT_KEY`, so a run can't bill a general-purpose key?
