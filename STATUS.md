@@ -43,6 +43,7 @@ inform this); `harness/out/` + `data` symlink untracked (cosmetic).
 
 | Branch | Status | Summary |
 |--------|--------|---------|
+| `paper-finder` | active | Paper-finding workflow: gather cited sources into a library-only paper repo (copy from other repos' `papers/` only, then open-access lookup + PDF download + text extraction), and hand a review a per-paper `data/sources/` folder. Explored and later calibrated on the power-side-detection draft. Feeds `source-check`. |
 | `source-check` | active | Stage 3.5 "strict mode": resolve `unverifiable` findings by checking the paper's characterization of cited sources against author-supplied extracted texts (local-first, content-indexed, double-gated). Design: `docs/convos/main/20260713_unverifiable_verdict_design.md`. |
 
 ## Recent Sessions
