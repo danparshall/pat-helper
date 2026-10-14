@@ -62,3 +62,22 @@ convo (see `docs/convos/main/20260708_pat_kickoff_and_reframe.md`):
 - On any substantive claim about model capabilities or timelines, cross-
   reference the primary source (`~/code/general-ai-abilities/PAPER_SUMMARIES.md`
   is a good starting index for what's already read)
+
+## Cross-repo reading (standing permission, Dan 2026-10-14)
+
+Reading Dan's other research repos under `~/code/` is allowed **read-only**,
+for checking the papers pat-helper reviews: the draft's source repo, its
+`papers/text/` collection, `PAPER_SUMMARIES.md`, and any prior claim checks.
+This overrides the global "ask before reading another repo" default for that
+purpose only. Don't write to those repos, and don't copy their content into
+committed pat-helper files (private drafts stay in gitignored `data/`).
+
+Known locations:
+- `~/code/verification/` — power-side-detection report and its sources.
+  `docs/historical/power-side-citation-check/results/claims_ledger.csv` is a
+  462-claim, two-checker citation check of the circulated draft
+  (`power-side-detection_20261008`) — usable as ground truth.
+- `~/code/policy-levers/`, `~/code/general-ai-abilities/`,
+  `~/code/econ-impact/` — other paper collections (`PAPER_SUMMARIES.md`).
+
+Web search agents may be used to find sources not held locally.
