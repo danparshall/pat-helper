@@ -65,19 +65,19 @@ convo (see `docs/convos/main/20260708_pat_kickoff_and_reframe.md`):
 
 ## Cross-repo reading (standing permission, Dan 2026-10-14)
 
-Reading Dan's other research repos under `~/code/` is allowed **read-only**,
-for checking the papers pat-helper reviews: the draft's source repo, its
-`papers/text/` collection, `PAPER_SUMMARIES.md`, and any prior claim checks.
-This overrides the global "ask before reading another repo" default for that
-purpose only. Don't write to those repos, and don't copy their content into
-committed pat-helper files (private drafts stay in gitignored `data/`).
+Reading **source papers only** — `papers/` and `papers/text/` — in Dan's other
+research repos under `~/code/` is allowed, read-only, for checking the papers
+pat-helper reviews. Nothing else in those repos: no `docs/`, `deliverables/`,
+results, convos, STATUS, or `PAPER_SUMMARIES.md`.
 
-Known locations:
-- `~/code/verification/` — power-side-detection report and its sources.
-  `docs/historical/power-side-citation-check/results/claims_ledger.csv` is a
-  462-claim, two-checker citation check of the circulated draft
-  (`power-side-detection_20261008`) — usable as ground truth.
-- `~/code/policy-levers/`, `~/code/general-ai-abilities/`,
-  `~/code/econ-impact/` — other paper collections (`PAPER_SUMMARIES.md`).
+**Why:** this repo tests the pat-helper tool and workflow. Other repos may hold
+their own reviews or citation checks of the same drafts (e.g. `~/code/verification/`
+ran one on the power-side report). Reading those contaminates the test, so they
+are off limits, including as "ground truth" for scoring. (On 2026-10-14 an agent
+read the verification repo's claim-check summary and ledger anyway; that session's
+judgments about the power-side report are not independent.)
 
-Web search agents may be used to find sources not held locally.
+Don't write to other repos, and don't copy their content into committed
+pat-helper files (private drafts stay in gitignored `data/`).
+
+Web search/fetch agents may be used to find sources not held locally.
