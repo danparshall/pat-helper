@@ -97,10 +97,29 @@ sought and surfaced; recorded as standing guidance in dotfiles
 `personal_info.md` (`22518d6`), and the ODEC note + inferences filed as
 verification#71.
 
+**Rule clarified by Dan (later the same session):** other repos'
+`PAPER_INDEX.md`, `PAPER_SUMMARIES.md` and paper texts are all fine to read
+as needed (index → summary → paper). What's off limits is comparing notes
+with *other citation checks* of the draft. The summary-text guard above is
+withdrawn; pat-helper and paper-library CLAUDE.md updated (`7ac01c3`,
+`f4ba5ec`).
+
+## Next steps (proposed order)
+
+1. **Citation extraction + coverage report** (this branch): parse a draft's
+   Sources section into `Citation`s (script first, model fallback), run
+   `find` on all, report catalog / downloaded / no-open-pdf / not-found
+   counts. Mechanical; tells us whether the finder is good enough before
+   building on it. Power-side draft is the test case.
+2. **Redesign `source-check`** (its branch's July plan): must run without a
+   second provider; must handle "no source for this number" as well as
+   "citation mischaracterized"; decide claim-centric vs critique-centric.
+3. **Calibrate on power-side** — clean session only (this one saw the
+   verification repo's check).
+
 ## Open Questions
 
-- Fix the 67 pointerless and 31 missing-PDF entries in their home repos?
-- Should a review of a draft from repo X exclude X's catalog entries?
+- (Filed as tasks below) Fix the 67 pointerless and 31 missing-PDF entries.
 - A pat-helper lens (or a search-agent prompt) for hard-constraint facts?
 - Citations from a draft → `Citation` objects: by hand, or extracted by a
   model from the draft's reference list?
