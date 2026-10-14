@@ -65,22 +65,20 @@ convo (see `docs/convos/main/20260708_pat_kickoff_and_reframe.md`):
 
 ## Cross-repo reading (standing permission, Dan 2026-10-14)
 
-Reading **source papers and their catalogs** in Dan's other research repos
-under `~/code/` is allowed, read-only, for checking the papers pat-helper
-reviews: `papers/`, `papers/text/`, `PAPER_SUMMARIES.md`, `PAPER_INDEX.md`.
-Prefer going through `~/code/paper-library` (catalog of those files, with
-pointers back to each PDF/text). Nothing else in those repos: no `docs/`,
-`deliverables/`, results, convos, or STATUS.
+**Allowed, read-only, as needed:** any repo's `PAPER_INDEX.md`,
+`PAPER_SUMMARIES.md`, `papers/` and `papers/text/` — index → summary → full
+paper. `~/code/paper-library` catalogs these with pointers back to each file.
 
-Summaries can mention how a paper was used in its home repo (4 verification
-entries mention the power-side work). When reviewing a draft from repo X,
-don't read X's summary *text*; headings, file names and the papers are fine.
+**Off limits: other citation checks.** pat-helper must not compare notes with
+any other check of a draft it reviews — claim ledgers, citation or claim-check
+results, reviews, audits, or convo/results docs about that draft (e.g.
+`~/code/verification/docs/historical/power-side-citation-check/`). Not as
+input, not as "ground truth" for scoring. If you're unsure whether a file is a
+check of the draft, don't open it; ask.
 
-**Why:** this repo tests the pat-helper tool and workflow. Other repos may hold
-their own reviews or citation checks of the same drafts (e.g. `~/code/verification/`
-ran one on the power-side report). Reading those contaminates the test, so they
-are off limits, including as "ground truth" for scoring. (On 2026-10-14 an agent
-read the verification repo's claim-check summary and ledger anyway; that session's
+**Why:** this repo tests the pat-helper tool and workflow, and those checks
+would contaminate the test. (On 2026-10-14 an agent read the verification
+repo's power-side claim-check summary and part of its ledger; that session's
 judgments about the power-side report are not independent.)
 
 Don't write to other repos, and don't copy their content into committed
