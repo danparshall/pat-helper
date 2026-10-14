@@ -65,10 +65,16 @@ convo (see `docs/convos/main/20260708_pat_kickoff_and_reframe.md`):
 
 ## Cross-repo reading (standing permission, Dan 2026-10-14)
 
-Reading **source papers only** — `papers/` and `papers/text/` — in Dan's other
-research repos under `~/code/` is allowed, read-only, for checking the papers
-pat-helper reviews. Nothing else in those repos: no `docs/`, `deliverables/`,
-results, convos, STATUS, or `PAPER_SUMMARIES.md`.
+Reading **source papers and their catalogs** in Dan's other research repos
+under `~/code/` is allowed, read-only, for checking the papers pat-helper
+reviews: `papers/`, `papers/text/`, `PAPER_SUMMARIES.md`, `PAPER_INDEX.md`.
+Prefer going through `~/code/paper-library` (catalog of those files, with
+pointers back to each PDF/text). Nothing else in those repos: no `docs/`,
+`deliverables/`, results, convos, or STATUS.
+
+Summaries can mention how a paper was used in its home repo (4 verification
+entries mention the power-side work). When reviewing a draft from repo X,
+don't read X's summary *text*; headings, file names and the papers are fine.
 
 **Why:** this repo tests the pat-helper tool and workflow. Other repos may hold
 their own reviews or citation checks of the same drafts (e.g. `~/code/verification/`
