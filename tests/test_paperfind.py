@@ -28,6 +28,31 @@ def make_pdf(text: str) -> bytes:
     return data
 
 
+SUMMARIES = """# PAPER_SUMMARIES
+
+### Rahman (2026) — "Does Distributed Training Undermine Compute Governance?"
+**File:** `RahmanR__2026--distributed.pdf` | **Text:** `text/RahmanR__2026--distributed.txt`
+Rahman summary body.
+
+### Hart (1992) — "Nonintrusive Appliance Load Monitoring"
+
+- Authors: George Hart
+- File: `Hart__1992--nilm.pdf`
+
+### vending-bench
+
+**Title:** Vending-Bench: Long-Term Coherence of Agents (Backlund & Petersson, 2025)
+
+- **File:** `Backlund_Petersson__2025--vending_bench.pdf`
+
+### Orphan (2020) — "Entry Whose PDF Is Missing"
+- File: `Orphan__2020--missing.pdf`
+
+### Davis / Dallas Fed (2026) — "Wage Data Entry With No File Line"
+Summary only; the repo never recorded a PDF.
+"""
+
+
 def make_source_repo(tmp_path, name="verification"):
     repo = tmp_path / name
     (repo / "papers" / "text").mkdir(parents=True)
@@ -35,8 +60,11 @@ def make_source_repo(tmp_path, name="verification"):
     (repo / "papers" / "RahmanR__2026--distributed.pdf").write_bytes(make_pdf("Rahman body"))
     (repo / "papers" / "text" / "RahmanR__2026--distributed.txt").write_text("Rahman text")
     (repo / "papers" / "Hart__1992--nilm.pdf").write_bytes(make_pdf("Hart nonintrusive"))
+    (repo / "papers" / "Backlund_Petersson__2025--vending_bench.pdf").write_bytes(make_pdf("vb"))
+    (repo / "PAPER_SUMMARIES.md").write_text(SUMMARIES)
+    (repo / "PAPER_INDEX.md").write_text("| Rahman (2026) | one line |\n")
     (repo / "docs" / "claims_ledger.csv").write_text("SECRET FINDINGS")
-    (repo / "PAPER_SUMMARIES.md").write_text("SECRET SUMMARY")
+    (repo / "STATUS.md").write_text("SECRET STATUS")
     return repo
 
 
@@ -89,41 +117,103 @@ def test_paper_id_handles_surname_comma_given_names():
     )
 
 
-# --- collect: copy from another repo's papers/ only -------------------------
+# --- catalog: point at another repo's papers, don't copy them ----------------
+# Dan (2026-10-14): copy each repo's PAPER_SUMMARIES/PAPER_INDEX, not its
+# papers; every entry must point back to the source PDF and text.
 
 
-def test_collect_copies_pdfs_and_texts_with_provenance(tmp_path):
+def test_catalog_copies_summaries_and_index_verbatim(tmp_path):
     repo = make_source_repo(tmp_path)
     lib = pf.Library(tmp_path / "lib")
-    added = pf.collect(repo, lib)
-    assert sorted(r["id"] for r in added) == ["Hart__1992--nilm", "RahmanR__2026--distributed"]
-    assert (lib.pdf_dir / "RahmanR__2026--distributed.pdf").exists()
-    # existing extracted text is copied verbatim, missing text is extracted
-    assert (lib.text_dir / "RahmanR__2026--distributed.txt").read_text() == "Rahman text"
-    assert "Hart nonintrusive" in (lib.text_dir / "Hart__1992--nilm.txt").read_text()
-    rec = {r["id"]: r for r in lib.records()}["Hart__1992--nilm"]
-    assert rec["origin"] == "copied"
-    assert rec["source_path"].endswith("papers/Hart__1992--nilm.pdf")
-    assert rec["text_method"] == "pymupdf"
-    assert len(rec["pdf_sha256"]) == 64
+    pf.catalog(repo, lib)
+    assert (lib.root / "catalogs" / "verification" / "PAPER_SUMMARIES.md").read_text() == SUMMARIES
+    assert (lib.root / "catalogs" / "verification" / "PAPER_INDEX.md").exists()
 
 
-def test_collect_never_reads_outside_papers(tmp_path):
+def test_catalog_entries_point_back_to_source_files(tmp_path):
     repo = make_source_repo(tmp_path)
     lib = pf.Library(tmp_path / "lib")
-    pf.collect(repo, lib)
-    everything = "".join(
-        p.read_text(errors="ignore") for p in (tmp_path / "lib").rglob("*") if p.is_file()
+    rows = pf.catalog(repo, lib)
+    entries = {e["file"]: e for e in rows if e["file"]}
+    assert set(entries) == {
+        "RahmanR__2026--distributed.pdf",
+        "Hart__1992--nilm.pdf",
+        "Backlund_Petersson__2025--vending_bench.pdf",
+        "Orphan__2020--missing.pdf",
+    }
+    rahman = entries["RahmanR__2026--distributed.pdf"]
+    assert rahman["pdf_path"] == str(repo / "papers" / "RahmanR__2026--distributed.pdf")
+    assert rahman["text_path"] == str(repo / "papers" / "text" / "RahmanR__2026--distributed.txt")
+    assert rahman["year"] == 2026
+    assert rahman["repo"] == "verification"
+    assert entries["Hart__1992--nilm.pdf"]["text_path"] is None  # no extracted text yet
+    assert entries["Backlund_Petersson__2025--vending_bench.pdf"]["year"] == 2025
+    assert entries["Orphan__2020--missing.pdf"]["pdf_exists"] is False
+    assert len(pf.catalog_entries(lib)) == 5
+
+
+def test_catalog_keeps_entries_without_file_pointer_visible(tmp_path):
+    """67 real entries lacked a File: line and were silently dropped (2026-10-14)."""
+    repo = make_source_repo(tmp_path)
+    lib = pf.Library(tmp_path / "lib")
+    [row] = [r for r in pf.catalog(repo, lib) if r["file"] is None]
+    assert row["heading"].startswith("Davis / Dallas Fed (2026)")
+    assert row["pdf_path"] is None and row["text_path"] is None
+    assert row["pdf_exists"] is False
+    assert row["id"] == "verification:L21"  # repo + summary line: unique, findable
+    with pytest.raises(ValueError, match="no File pointer"):
+        pf.export([row["id"]], lib, tmp_path / "sources")
+
+
+def test_catalog_paths_under_home_are_portable(tmp_path, monkeypatch):
+    """Dan's Macs use /Users/dan, tarragon /home/dan: store '~/...'."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = make_source_repo(tmp_path / "code")
+    lib = pf.Library(tmp_path / "lib")
+    row = next(r for r in pf.catalog(repo, lib) if r["file"] == "RahmanR__2026--distributed.pdf")
+    assert row["pdf_path"] == "~/code/verification/papers/RahmanR__2026--distributed.pdf"
+    pf.export(["RahmanR__2026--distributed"], lib, tmp_path / "sources")
+    assert (tmp_path / "sources" / "RahmanR__2026--distributed.txt").read_text() == "Rahman text"
+
+
+def test_catalog_copies_no_papers_and_reads_nothing_else(tmp_path):
+    repo = make_source_repo(tmp_path)
+    lib = pf.Library(tmp_path / "lib")
+    pf.catalog(repo, lib)
+    files = [p for p in (tmp_path / "lib").rglob("*") if p.is_file()]
+    assert not any(p.suffix == ".pdf" for p in files)
+    assert "SECRET" not in "".join(p.read_text(errors="ignore") for p in files)
+
+
+def test_catalog_rerun_replaces_that_repos_entries(tmp_path):
+    repo = make_source_repo(tmp_path)
+    other = make_source_repo(tmp_path, name="econ-impact")
+    lib = pf.Library(tmp_path / "lib")
+    pf.catalog(repo, lib)
+    pf.catalog(other, lib)
+    pf.catalog(repo, lib)
+    repos = [e["repo"] for e in pf.catalog_entries(lib)]
+    assert repos.count("verification") == 5
+    assert repos.count("econ-impact") == 5
+
+
+def test_same_paper_in_two_repos_is_not_ambiguous(tmp_path):
+    """Rahman 2026 sits in verification and policy-levers, with file names
+    differing only in '-' vs '_' (live, 2026-10-14)."""
+    a = make_source_repo(tmp_path, name="verification")
+    b = make_source_repo(tmp_path, name="policy-levers")
+    src = b / "papers" / "RahmanR__2026--distributed.pdf"
+    src.rename(b / "papers" / "RahmanR__2026--distributed_.pdf")
+    (b / "PAPER_SUMMARIES.md").write_text(
+        SUMMARIES.replace("RahmanR__2026--distributed.pdf", "RahmanR__2026--distributed_.pdf")
     )
-    assert "SECRET" not in everything
-
-
-def test_collect_is_idempotent(tmp_path):
-    repo = make_source_repo(tmp_path)
     lib = pf.Library(tmp_path / "lib")
-    pf.collect(repo, lib)
-    assert pf.collect(repo, lib) == []
-    assert len(lib.records()) == 2
+    pf.catalog(a, lib)
+    pf.catalog(b, lib)
+    cite = pf.Citation("Does distributed training undermine compute governance?", "Rahman", 2026)
+    result = pf.find(cite, lib, _no_network())
+    assert result.status == "catalog"
+    assert result.record["text_path"]  # prefers the copy that has extracted text
 
 
 # --- find: local first, then open access ----------------------------------
@@ -137,18 +227,35 @@ def search_ok(*works):
     return httpx.Response(200, json={"results": list(works)})
 
 
-def test_find_returns_local_hit_without_network(tmp_path):
-    repo = make_source_repo(tmp_path)
-    lib = pf.Library(tmp_path / "lib")
-    pf.collect(repo, lib)
-
+def _no_network():
     def boom(request):
         raise AssertionError("network used for a local hit")
 
-    cite = pf.Citation(title="Distributed training", author="Rahman", year=2026)
-    result = pf.find(cite, lib, client_for({("api.openalex.org", "/"): boom}))
-    assert result.status == "local"
-    assert result.record["id"] == "RahmanR__2026--distributed"
+    return client_for({("api.openalex.org", "/"): boom})
+
+
+def test_find_returns_catalog_pointer_without_network(tmp_path):
+    repo = make_source_repo(tmp_path)
+    lib = pf.Library(tmp_path / "lib")
+    pf.catalog(repo, lib)
+    cite = pf.Citation(
+        title="Does distributed training undermine compute governance?", author="Rahman", year=2026
+    )
+    result = pf.find(cite, lib, _no_network())
+    assert result.status == "catalog"
+    assert result.record["pdf_path"] == str(repo / "papers" / "RahmanR__2026--distributed.pdf")
+
+
+def test_find_catalog_needs_author_and_year_too(tmp_path):
+    repo = make_source_repo(tmp_path)
+    lib = pf.Library(tmp_path / "lib")
+    pf.catalog(repo, lib)
+    work = openalex_work("Nonintrusive Appliance Load Monitoring", year=1992, authors=("X Y",))
+    client = client_for({("api.openalex.org", "/works"): search_ok(work)})
+    wrong_author = pf.Citation("Nonintrusive appliance load monitoring", "Kolter", 1992)
+    assert pf.find(wrong_author, lib, client).status != "catalog"
+    wrong_year = pf.Citation("Nonintrusive appliance load monitoring", "Hart", 2005)
+    assert pf.find(wrong_year, lib, client).status != "catalog"
 
 
 def test_find_downloads_open_access_pdf_and_records_provenance(tmp_path):
@@ -297,15 +404,30 @@ def test_find_rejects_non_pdf_download(tmp_path):
 # --- export: per-review sources folder -------------------------------------
 
 
-def test_export_copies_texts_to_sources_folder(tmp_path):
+def test_export_reads_catalog_sources_in_place(tmp_path):
+    """Catalog ids are PDF stems; text comes from the source repo (extracted if
+    the repo has none), and the manifest keeps the pointer."""
     repo = make_source_repo(tmp_path)
     lib = pf.Library(tmp_path / "lib")
-    pf.collect(repo, lib)
+    pf.catalog(repo, lib)
     dest = tmp_path / "sources"
-    pf.export(["Hart__1992--nilm"], lib, dest)
+    pf.export(["RahmanR__2026--distributed", "Hart__1992--nilm"], lib, dest)
+    assert (dest / "RahmanR__2026--distributed.txt").read_text() == "Rahman text"
     assert "Hart nonintrusive" in (dest / "Hart__1992--nilm.txt").read_text()
-    manifest = json.loads((dest / "manifest.json").read_text())
-    assert manifest[0]["id"] == "Hart__1992--nilm"
+    manifest = {m["id"]: m for m in json.loads((dest / "manifest.json").read_text())}
+    assert manifest["Hart__1992--nilm"]["pdf_path"] == str(repo / "papers" / "Hart__1992--nilm.pdf")
+
+
+def test_export_downloaded_record(tmp_path):
+    lib = pf.Library(tmp_path / "lib")
+    work = openalex_work("Solar Flares", authors=("Ada Lovelace",), pdf_url="https://example.org/s.pdf")
+    client = client_for({
+        ("api.openalex.org", "/works"): search_ok(work),
+        ("example.org", "/s.pdf"): httpx.Response(200, content=make_pdf("sunspots")),
+    })
+    rid = pf.find(pf.Citation("Solar flares", "Lovelace", 2024), lib, client).record["id"]
+    pf.export([rid], lib, tmp_path / "sources")
+    assert "sunspots" in (tmp_path / "sources" / f"{rid}.txt").read_text()
 
 
 def test_export_unknown_id_raises(tmp_path):

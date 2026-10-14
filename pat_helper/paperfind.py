@@ -2,11 +2,12 @@
 
 Three operations, all writing provenance to the library's `index.jsonl`:
 
-- collect(repo, lib): copy PDFs (and any extracted text) from another repo's
-  `papers/` folder. Reads nothing outside `papers/` — other repos may hold
-  their own reviews of the same drafts, and reading those would contaminate
-  a pat-helper test.
-- find(citation, lib, client): local library first; otherwise an OpenAlex
+- catalog(repo, lib): copy another repo's PAPER_SUMMARIES.md / PAPER_INDEX.md
+  verbatim and write one catalog.jsonl row per summary entry, pointing back
+  at the source PDF and text. Papers are not copied. Nothing else in the
+  repo is read: other repos may hold their own reviews of the same drafts,
+  and reading those would contaminate a pat-helper test.
+- find(citation, lib, client): library and catalog first; otherwise an OpenAlex
   title search, an open-access PDF (best OA location, any location, or
   arXiv), a check that the bytes really are a PDF, and text extraction. A
   candidate is added only if title, author and year all match the citation;
@@ -25,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,7 +49,8 @@ class Library:
         self.root = Path(root)
         self.text_dir = self.root / "papers" / "text"
         self.pdf_dir = self.root / "data" / "pdfs"
-        self.index_path = self.root / "index.jsonl"
+        self.index_path = self.root / "index.jsonl"  # papers downloaded into the library
+        self.catalog_path = self.root / "catalog.jsonl"  # pointers into other repos
 
     def records(self) -> list[dict]:
         if not self.index_path.exists():
@@ -109,36 +112,112 @@ def extract_text(pdf_bytes: bytes) -> str:
         return "\n".join(page.get_text() for page in doc)
 
 
-# --- collect -----------------------------------------------------------------
+# --- catalog -----------------------------------------------------------------
+# Papers stay in their home repos. The library holds a verbatim copy of each
+# repo's PAPER_SUMMARIES.md / PAPER_INDEX.md plus catalog.jsonl, one row per
+# summary entry pointing back at the source PDF and text.
+
+CATALOG_FILES = ("PAPER_SUMMARIES.md", "PAPER_INDEX.md")
+_FILE_POINTER = re.compile(r"\*{0,2}File:\*{0,2}\s*`([^`]+)`")
+_TITLE_LINE = re.compile(r"^\*\*Title:\*\*\s*(.+)$")
+_YEAR = re.compile(r"\b(19\d{2}|20\d{2})\b")
+_FILE_YEAR = re.compile(r"__(\d{4})(?:--|__)")
 
 
-def collect(repo: Path, lib: Library) -> list[dict]:
-    repo = Path(repo)
-    papers = repo / "papers"
-    known = {r["pdf_sha256"] for r in lib.records()}
-    added = []
-    for pdf in sorted(papers.glob("*.pdf")):
-        data = pdf.read_bytes()
-        digest = _sha256(data)
-        if digest in known:
+def _portable(path: Path) -> str:
+    """'~/...' for paths under home, so the catalog works on every machine."""
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
+
+
+def _git_head(repo: Path) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return out.stdout.strip()
+
+
+def _parse_summaries(text: str) -> list[dict]:
+    """Split on '### ' headings; keep heading, optional **Title:** line, File pointer."""
+    entries, current = [], None
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if line.startswith("### "):
+            current = {"heading": line[4:].strip(), "line": lineno, "title_line": "", "file": None}
+            entries.append(current)
             continue
-        existing_text = papers / "text" / f"{pdf.stem}.txt"
-        if existing_text.exists():
-            text, method = existing_text.read_text(errors="replace"), "copied"
-        else:
-            text, method = extract_text(data), "pymupdf"
-        record = {
-            "id": pdf.stem,
-            "origin": "copied",
-            "source_repo": repo.name,
-            "source_path": str(pdf),
-            "pdf_sha256": digest,
-            "text_method": method,
-            "collected_at": _now(),
-        }
-        added.append(lib.add(record, data, text))
-        known.add(digest)
-    return added
+        if current is None:
+            continue
+        m = _TITLE_LINE.match(line.strip())
+        if m and not current["title_line"]:
+            current["title_line"] = m.group(1)
+        m = _FILE_POINTER.search(line)
+        if m and current["file"] is None:
+            current["file"] = m.group(1)
+    return entries
+
+
+def _entry_year(entry: dict) -> int | None:
+    for text in (entry["heading"], entry["title_line"]):
+        m = _YEAR.search(text)
+        if m:
+            return int(m.group(1))
+    m = _FILE_YEAR.search(entry["file"] or "")
+    return int(m.group(1)) if m else None
+
+
+def catalog(repo: Path, lib: Library) -> list[dict]:
+    """Copy repo's summary/index files and (re)write its catalog rows."""
+    repo = Path(repo)
+    dest = lib.root / "catalogs" / repo.name
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in CATALOG_FILES:
+        if (repo / name).exists():
+            shutil.copyfile(repo / name, dest / name)
+
+    sha, now = _git_head(repo), _now()
+    rows = []
+    summaries = repo / "PAPER_SUMMARIES.md"
+    for e in _parse_summaries(summaries.read_text()) if summaries.exists() else []:
+        if e["file"]:
+            rid = Path(e["file"]).stem
+            pdf = repo / "papers" / e["file"]
+            text = repo / "papers" / "text" / f"{rid}.txt"
+            pdf_path, pdf_exists = _portable(pdf), pdf.exists()
+            text_path = _portable(text) if text.exists() else None
+        else:  # summary with no File: line — kept visible, never silently dropped
+            rid = f"{repo.name}:L{e['line']}"
+            pdf_path, pdf_exists, text_path = None, False, None
+        rows.append({
+            "id": rid,
+            "repo": repo.name,
+            "heading": e["heading"],
+            "title_line": e["title_line"],
+            "file": e["file"],
+            "year": _entry_year(e),
+            "pdf_path": pdf_path,
+            "pdf_exists": pdf_exists,
+            "text_path": text_path,
+            "summary_line": e["line"],
+            "source_sha": sha,
+            "cataloged_at": now,
+        })
+
+    kept = [r for r in catalog_entries(lib) if r["repo"] != repo.name]
+    lib.catalog_path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in kept + rows))
+    return rows
+
+
+def catalog_entries(lib: Library) -> list[dict]:
+    if not lib.catalog_path.exists():
+        return []
+    lines = lib.catalog_path.read_text().splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
 
 
 # --- find --------------------------------------------------------------------
@@ -176,43 +255,56 @@ def _year_ok(cited: int, found) -> bool:
         return False
 
 
-def _parse_id(rid: str) -> tuple[list[str], str, str]:
-    """'{First}_{Last}__{Year}--{slug}' -> (author parts, year, slug)."""
-    head, _, rest = rid.partition("__")
-    year, _, slug = rest.partition("--")
-    return head.split("_"), year, slug
+def title_coverage(cited: str, haystack: str) -> float:
+    """Share of the cited title's words present in a heading (which also
+    carries authors and venue, so Jaccard would understate a true match)."""
+    wc, wh = set(_words(cited)), set(_words(haystack))
+    return len(wc & wh) / len(wc) if wc else 0.0
+
+
+def _catalog_author_ok(surname: str, entry: dict) -> bool:
+    tokens = set(_words_keep_all(f"{entry['heading']} {entry['title_line']}"))
+    file_parts = Path(entry["file"]).stem.split("__")[0].split("_") if entry["file"] else []
+    return surname in tokens or any(p.lower().startswith(surname) for p in file_parts)
 
 
 def _local_hit(cite: Citation, lib: Library) -> FindResult | None:
+    """Downloaded papers first, then catalog pointers. Same three checks as
+    remote candidates: title, author, year."""
     surname = cite.author.lower()
-    cite_words = set(_words(cite.title))
     scored = []
     for rec in lib.records():
-        if rec.get("title"):
-            authors, year, title = rec.get("authors", []), rec.get("year"), rec["title"]
-            if surname not in _author_tokens(authors):
-                continue
-            overlap = title_similarity(cite.title, title)
-            if overlap < TITLE_THRESHOLD:
-                continue
-        else:  # copied record: only the filename-style id is known
-            parts, year, slug = _parse_id(rec["id"])
-            if not any(p.lower().startswith(surname) for p in parts):
-                continue
-            slug_words = set(_words(slug.replace("-", " ")))
-            overlap = len(cite_words & slug_words) / max(len(cite_words), 1)
-            if overlap == 0:
-                continue
-        if not _year_ok(cite.year, year):
-            continue
-        scored.append((overlap, rec))
+        sim = title_similarity(cite.title, rec.get("title", ""))
+        if (
+            sim >= TITLE_THRESHOLD
+            and surname in _author_tokens(rec.get("authors", []))
+            and _year_ok(cite.year, rec.get("year"))
+        ):
+            scored.append((sim, "local", rec))
+    for entry in catalog_entries(lib):
+        cov = title_coverage(cite.title, f"{entry['heading']} {entry['title_line']}")
+        if (
+            cov >= TITLE_THRESHOLD
+            and _catalog_author_ok(surname, entry)
+            and _year_ok(cite.year, entry.get("year"))
+        ):
+            scored.append((cov, "catalog", entry))
     if not scored:
         return None
-    scored.sort(key=lambda t: t[0], reverse=True)
-    if len(scored) > 1 and scored[0][0] == scored[1][0]:
-        ids = ", ".join(r["id"] for _, r in scored)
-        return FindResult("local-ambiguous", detail=f"several library papers match: {ids}")
-    return FindResult("local", record=scored[0][1])
+    best = max(s for s, _, _ in scored)
+    top = [(status, rec) for s, status, rec in scored if s == best]
+    if len({_paper_key(rec) for _, rec in top}) > 1:
+        where = ", ".join(f"{r.get('repo', 'library')}:{r['id']}" for _, r in top)
+        return FindResult("local-ambiguous", detail=f"several papers match: {where}")
+    # One paper, possibly held in several repos: prefer a copy with extracted text.
+    status, record = max(top, key=lambda t: bool(t[1].get("text_path") or t[0] == "local"))
+    return FindResult(status, record=record)
+
+
+def _paper_key(rec: dict) -> str:
+    """Same paper across repos: file stems equal up to case, '-' and '_'."""
+    stem = Path(rec["file"]).stem if rec.get("file") else rec["id"]
+    return re.sub(r"[-_]+", "", stem.lower())
 
 
 def _authors(work: dict) -> list[str]:
@@ -307,16 +399,30 @@ def find(cite: Citation, lib: Library, client: httpx.Client) -> FindResult:
 
 
 def export(ids: list[str], lib: Library, dest: Path) -> list[dict]:
-    by_id = {r["id"]: r for r in lib.records()}
-    missing = [i for i in ids if i not in by_id]
+    """Write a review's sources folder: downloaded papers from the library,
+    catalog papers read in place from their home repo."""
+    downloaded = {r["id"]: r for r in lib.records()}
+    cataloged = {r["id"]: r for r in catalog_entries(lib)}
+    missing = [i for i in ids if i not in downloaded and i not in cataloged]
     if missing:
         raise KeyError(f"not in library: {', '.join(missing)}")
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     manifest = []
     for i in ids:
-        shutil.copyfile(lib.text_dir / f"{i}.txt", dest / f"{i}.txt")
-        manifest.append(by_id[i])
+        out = dest / f"{i}.txt"
+        if i in downloaded:
+            shutil.copyfile(lib.text_dir / f"{i}.txt", out)
+            manifest.append(downloaded[i])
+            continue
+        entry = cataloged[i]
+        if entry["pdf_path"] is None:
+            raise ValueError(f"{i} ({entry['heading']}) has no File pointer in its summary")
+        if entry["text_path"]:
+            shutil.copyfile(Path(entry["text_path"]).expanduser(), out)
+        else:
+            out.write_text(extract_text(Path(entry["pdf_path"]).expanduser().read_bytes()))
+        manifest.append(entry)
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
     return manifest
 
@@ -332,8 +438,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="paperfind")
     parser.add_argument("--library", type=Path, default=_default_library())
     sub = parser.add_subparsers(dest="command", required=True)
-    c = sub.add_parser("collect", help="Copy papers/ from another repo")
-    c.add_argument("repo", type=Path)
+    c = sub.add_parser("catalog", help="Catalog another repo's PAPER_SUMMARIES/INDEX")
+    c.add_argument("repos", type=Path, nargs="+")
     f = sub.add_parser("find", help="Find a paper locally or via open access")
     f.add_argument("--title", required=True)
     f.add_argument("--author", required=True, help="surname of any author")
@@ -344,9 +450,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     lib = Library(args.library)
 
-    if args.command == "collect":
-        added = collect(args.repo, lib)
-        print(f"{len(added)} added from {args.repo}")
+    if args.command == "catalog":
+        for repo in args.repos:
+            rows = catalog(repo, lib)
+            no_ptr = sum(r["file"] is None for r in rows)
+            no_pdf = sum(r["file"] is not None and not r["pdf_exists"] for r in rows)
+            no_text = sum(r["pdf_exists"] and r["text_path"] is None for r in rows)
+            print(
+                f"{repo.name}: {len(rows)} entries ({no_ptr} without File pointer, "
+                f"{no_pdf} pointing at a missing PDF, {no_text} without extracted text)"
+            )
     elif args.command == "find":
         with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=60) as client:
             result = find(Citation(args.title, args.author, args.year), lib, client)

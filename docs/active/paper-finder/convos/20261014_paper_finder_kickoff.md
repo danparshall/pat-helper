@@ -70,10 +70,38 @@ unprompted, which is the property any web step must preserve.
 
 - `pat_helper/paperfind.py`, `tests/test_paperfind.py` (18 tests; 76/76 suite).
 
+## Addendum (same session): catalog, not copies
+
+Dan reversed the copy design: take each repo's PAPER_SUMMARIES/PAPER_INDEX,
+not its papers, with every entry pointing back to the source. `collect` was
+replaced by `catalog` (verbatim copies under `catalogs/<repo>/` +
+`catalog.jsonl`, `~/`-relative paths, source git SHA). `find` checks the
+catalog with the same title/author/year discipline; `export` reads catalog
+papers in place.
+
+First real catalog (paper-library `7055cd5`): 856 entries from
+verification 165, econ-impact 212, policy-levers 42, general-ai-abilities
+437. Live run exposed: 67 entries with no `File:` pointer (now kept as
+visible `repo:L<line>` rows, previously silently dropped); 31 pointing at a
+missing PDF; the same paper in two repos (Rahman 2026, `-` vs `_` in the
+file name) reported as ambiguous (now deduplicated).
+
+Contamination check (count-only, headings only): 4 verification entries
+mention power-side/claim-check terms (Choukse 2025; Leklem & Maheshwari
+2026; von Meier et al. 2014; Stewart et al. 2016). pat-helper's own code
+never reads summary text — only headings, file names and the papers —
+so exposure is limited to agents opening the copied summaries directly.
+
+Dan also asked that hard-constraint facts like the ODEC caps be actively
+sought and surfaced; recorded as standing guidance in dotfiles
+`personal_info.md` (`22518d6`), and the ODEC note + inferences filed as
+verification#71.
+
 ## Open Questions
 
-- Populate the library: run `collect` on verification / econ-impact /
-  policy-levers / general-ai-abilities `papers/`? (Not yet run.)
+- Fix the 67 pointerless and 31 missing-PDF entries in their home repos?
+- Should a review of a draft from repo X exclude X's catalog entries?
+- A pat-helper lens (or a search-agent prompt) for hard-constraint facts?
 - Citations from a draft → `Citation` objects: by hand, or extracted by a
   model from the draft's reference list?
 - Paywalled sources: Dan's institutional access? Claude in Chrome rescue?
