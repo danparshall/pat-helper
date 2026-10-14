@@ -1,6 +1,9 @@
 """Anthropic provider. Verified against claude-api skill 2026-07-10 / 2026-07-11.
 
-- AsyncAnthropic resolves ANTHROPIC_API_KEY (or an `ant auth login` profile).
+- Auth: the key comes from PAPER_ASSISTANT_KEY, a key dedicated to this tool,
+  passed explicitly to AsyncAnthropic. There is deliberately no fallback to
+  ANTHROPIC_API_KEY or an `ant auth login` profile, so a run can never bill a
+  general-purpose key.
 - Structured output via output_config.format json_schema.
 - Adaptive thinking; SDK auto-retries 429/5xx (max_retries default 2).
 - Always streams: adaptive-thinking tokens count against max_tokens, and the
@@ -17,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from anthropic import AsyncAnthropic
 
@@ -24,13 +28,18 @@ from pat_helper.providers.base import Provider, TruncatedOutputError, parse_json
 
 log = logging.getLogger("pat_helper")
 
+ANTHROPIC_KEY_ENV = "PAPER_ASSISTANT_KEY"
+
 
 class AnthropicProvider(Provider):
     def __init__(self, model: str, max_output_tokens: int = 8192):
         self.name = "anthropic"
         self.model = model
         self.max_output_tokens = max_output_tokens
-        self._client = AsyncAnthropic()
+        api_key = os.environ.get(ANTHROPIC_KEY_ENV)
+        if not api_key:
+            raise RuntimeError(f"{ANTHROPIC_KEY_ENV} is not set")
+        self._client = AsyncAnthropic(api_key=api_key)
 
     async def complete_json(
         self,

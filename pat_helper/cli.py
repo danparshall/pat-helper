@@ -22,7 +22,7 @@ from pat_helper.report import render
 # probed by construction rather than by checking these vars — see
 # docs/plans/main/20260709_v1_hardening_try_except.md.
 PROVIDER_ENV_VARS = {
-    "anthropic": "ANTHROPIC_API_KEY",
+    "anthropic": "PAPER_ASSISTANT_KEY",  # dedicated key; see anthropic_client.py
     "openai": "OPENAI_API_KEY",
     "google": "GEMINI_API_KEY",
 }

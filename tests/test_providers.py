@@ -97,6 +97,8 @@ class _CapturingGoogleSDK:
 
 
 def _patch(monkeypatch):
+    # The Anthropic provider reads its dedicated key before building the SDK.
+    monkeypatch.setenv("PAPER_ASSISTANT_KEY", "sk-ant-test")
     monkeypatch.setattr(
         "pat_helper.providers.anthropic_client.AsyncAnthropic", _CapturingAnthropicSDK
     )

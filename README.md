@@ -29,9 +29,13 @@ Source paper + summary + kickoff convo in `docs/convos/main/`.
 
 ```bash
 uv venv && uv sync
-cp .env.example .env   # fill in ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY
+cp .env.example .env   # fill in PAPER_ASSISTANT_KEY / OPENAI_API_KEY / GEMINI_API_KEY
 uv run pat-helper review path/to/main.tex
 ```
+
+Anthropic calls bill only to `PAPER_ASSISTANT_KEY`, a key kept for this tool
+alone. The generic `ANTHROPIC_API_KEY` is never read; without the dedicated
+key, Anthropic is reported as a coverage gap.
 
 Output: `review_<paper>_<date>.md` — findings grouped by severity, each tagged
 `{lens, models, quote, evidence, suggested-fix}`, with demoted (ungrounded or

@@ -60,6 +60,8 @@ _SDK_ATTRS = {
 
 
 def _patch_sdks(monkeypatch, broken: set[str] = frozenset()):
+    # The Anthropic provider reads its dedicated key before building the SDK.
+    monkeypatch.setenv("PAPER_ASSISTANT_KEY", "sk-ant-test")
     for name, (attr, fake) in _SDK_ATTRS.items():
         monkeypatch.setattr(attr, _RaisingSDK if name in broken else fake)
 
