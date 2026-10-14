@@ -109,3 +109,10 @@ verification#71.
   cited 2024). Keep, or prefer the cited year?
 - Where does `find` plug into the review pipeline — before the review
   (sources folder ready) or after (only for flagged citations)?
+
+## Captured Tasks
+
+- [econ-impact#94: Fix 40 PAPER_SUMMARIES entries with no File: pointer](https://github.com/danparshall/econ-impact/issues/94) — captured 2026-10-14
+- [general-ai-abilities#50: Fix 55 PAPER_SUMMARIES entries: 27 no File: pointer, 28 missing PDF](https://github.com/danparshall/general-ai-abilities/issues/50) — captured 2026-10-14
+- [verification#72: Fix 3 PAPER_SUMMARIES entries pointing at a missing PDF](https://github.com/danparshall/verification/issues/72) — captured 2026-10-14
+- [verification#71: Hard caps from utility planning criteria (ODEC) + power-side inferences](https://github.com/danparshall/verification/issues/71) — captured 2026-10-14
