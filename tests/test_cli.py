@@ -29,17 +29,40 @@ class _RaisingSDK:
 
 class _FakeAnthropicSDK:
     def __init__(self, *args, **kwargs):
-        async def create(**kwargs):
-            block = SimpleNamespace(type="text", text=EMPTY_FINDINGS)
-            return SimpleNamespace(content=[block])
+        class _Stream:
+            def __init__(self, **kwargs):
+                pass
 
-        self.messages = SimpleNamespace(create=create)
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def get_final_message(self):
+                return SimpleNamespace(
+                    stop_reason="end_turn",
+                    content=[SimpleNamespace(type="text", text=EMPTY_FINDINGS)],
+                    usage=SimpleNamespace(
+                        input_tokens=0,
+                        output_tokens=0,
+                        cache_read_input_tokens=0,
+                        cache_creation_input_tokens=0,
+                    ),
+                )
+
+        self.messages = SimpleNamespace(stream=_Stream)
 
 
 class _FakeOpenAISDK:
     def __init__(self, *args, **kwargs):
         async def create(**kwargs):
-            return SimpleNamespace(output_text=EMPTY_FINDINGS)
+            return SimpleNamespace(
+                status="completed",
+                incomplete_details=None,
+                output_text=EMPTY_FINDINGS,
+                usage=None,
+            )
 
         self.responses = SimpleNamespace(create=create)
 
@@ -47,7 +70,11 @@ class _FakeOpenAISDK:
 class _FakeGoogleSDK:
     def __init__(self, *args, **kwargs):
         async def generate_content(**kwargs):
-            return SimpleNamespace(text=EMPTY_FINDINGS)
+            return SimpleNamespace(
+                text=EMPTY_FINDINGS,
+                candidates=[SimpleNamespace(finish_reason="STOP")],
+                usage_metadata=None,
+            )
 
         self.aio = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
 
@@ -75,6 +102,9 @@ def test_missing_openai_key_records_gap_and_continues(monkeypatch, tmp_path):
     assert len(gap_lines) == 1
     assert "openai" in gap_lines[0]
     assert "OPENAI_API_KEY" in gap_lines[0]
+    # The surviving providers' cells must actually run; a fake that drifts from
+    # the provider client turns every cell into a retried failure.
+    assert "failed after retries" not in report
 
 
 def test_all_keys_missing_exits_cleanly(monkeypatch, tmp_path):
